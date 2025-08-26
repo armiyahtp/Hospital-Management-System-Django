@@ -9,7 +9,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, max_length=260, error_messages={'unique': 'Email already exist'})
     phone_number = models.CharField(max_length=15, null=True, blank=True)
     is_manager= models.BooleanField(default=False)
-    is_patient = models.BooleanField(default=False)
+    is_customer = models.BooleanField(default=False)
     is_doctor = models.BooleanField(default=False)
     is_receptionist = models.BooleanField(default=False)
 

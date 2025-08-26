@@ -18,15 +18,15 @@ class UserSerializer(ModelSerializer):
         fields = ('id', 'email', 'phone_number', 'first_name', 'last_name')
         read_only_fields = ('id',)
 
-        
 
-class CustomerSignupSerializer(ModelSerializer):
+
+class CustomerRegisterSerializer(ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ('email', 'phone_number', 'password', 'confirm_password', 'first_name', 'last_name')
+        fields = ('email', 'first_name',  'last_name', 'phone_number', 'password', 'confirm_password',)
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
