@@ -1,5 +1,5 @@
 from django.urls import path,include
-from api.v1.customer import views
+from api.v1.doctor import views
 
 
 
