@@ -24,10 +24,11 @@ class UserSerializer(ModelSerializer):
 class RegisterSerializer(ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
+    license_number = serializers.CharField(write_only=True, required=True, max_length=50)
 
     class Meta:
         model = User
-        fields = ('email', 'first_name',  'last_name', 'phone_number', 'password', 'confirm_password',)
+        fields = ('email', 'first_name',  'last_name', 'phone_number', 'password', 'confirm_password','license_number')
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:

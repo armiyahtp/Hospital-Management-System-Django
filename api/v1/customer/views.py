@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.contrib.auth import authenticate
 from .serializers import *
-from common.serializers import *
+from api.v1.common.serializers import UserSerializer
 from customer.models import *
 
 
@@ -37,7 +37,7 @@ def customer_login(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def customer_register(request):
-    serializer = RegisterSerializer(data=request.data)
+    serializer = CustomerRegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = User.objects.create_user(
             email=serializer.validated_data['email'],
