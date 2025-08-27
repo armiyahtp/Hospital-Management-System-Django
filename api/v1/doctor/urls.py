@@ -3,4 +3,7 @@ from api.v1.doctor import views
 
 
 
-urlpatterns = []
+urlpatterns = [
+    path('login/', views.doctor_login, name='doctor_login'),
+    path('register/', views.doctor_register, name='doctor_register'),
+]

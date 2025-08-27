@@ -32,6 +32,10 @@ INSTALLED_APPS = [
     'customer',
     'web',
     'hospital',
+    'manager',
+    'doctor',
+    'receptionist',
+    'main',
 
 ]
 
