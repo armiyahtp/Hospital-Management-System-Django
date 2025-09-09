@@ -28,7 +28,7 @@ def customer_login(request):
             'user' : UserSerializer(user, context = {'request' : request}).data
         }
 
-        return Response({'status_code' : 6000, 'data' : data})
+        return Response({'status_code' : 6000, 'data' : data, 'message' : 'Login Success full'})
     return Response({'status_code' : 6001, 'error' : 'Invalid credentials'})
 
 
@@ -48,5 +48,6 @@ def customer_register(request):
             is_customer=True
         )
         Customer.objects.create(user=user)
-        return Response({"status_code": 6000, "message": "User created successfully"})
+        refresh = RefreshToken.for_user(user)
+        return Response({"status_code": 6000, 'access' : str(refresh.access_token), "message": "User created successfully"})
     return Response({"status_code": 6001, "error": serializer.errors})

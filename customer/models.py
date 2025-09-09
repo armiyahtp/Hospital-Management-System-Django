@@ -6,7 +6,6 @@ from users.models import User
 class Customer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
-
     class Meta:
         db_table = 'customers_customer'
         verbose_name = 'customer'
@@ -15,3 +14,6 @@ class Customer(models.Model):
     
     def __str__(self):
         return self.user.email 
+    
+
+
