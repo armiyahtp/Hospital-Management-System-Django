@@ -20,3 +20,13 @@ class Doctor(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.license_number})"
+    
+
+
+
+
+class Leave(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="leaves")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField(blank=True)
