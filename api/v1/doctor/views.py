@@ -9,6 +9,7 @@ from django.contrib.auth import authenticate
 from .serializers import *
 from api.v1.common.serializers import *
 from doctor.models import *
+from hospital.models import DoctorsInHospital
 
 
 

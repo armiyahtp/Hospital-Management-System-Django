@@ -1,4 +1,5 @@
 from django.db import models
+from datetime import datetime, timedelta, date
 from doctor.models import *
 
 
@@ -90,6 +91,9 @@ class DoctorAvailability(models.Model):
     weekday = models.IntegerField(choices=WEEKDAYS) 
     start_time = models.TimeField() 
     end_time = models.TimeField()
+    consult_duration = models.IntegerField(default=10)
+    lunch_start = models.TimeField(blank=True, null=True)
+    lunch_end = models.TimeField(blank=True, null=True)
         
 
     class Meta:
@@ -101,7 +105,39 @@ class DoctorAvailability(models.Model):
 
 
     def __str__(self):
-        return f"{self.doctor.name} - {self.get_weekday_display()}"
+        return f"{self.doctor.user.first_name} {self.doctor.user.last_name} - {self.get_weekday_display()}"
+
+
+
+
+
+
+
+
+
+
+
+class Token(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="tokens")
+    appointment_date = models.DateField()
+    token_number = models.CharField(max_length=20)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_booked = models.BooleanField(default=False)
+    is_canceled = models.BooleanField(default=False)
+
+
+    class Meta:
+        unique_together = ('doctor', 'appointment_date', 'token_number')
+        db_table = 'tokens'
+        verbose_name = 'token'
+        verbose_name_plural = 'tokens'
+        ordering = ["-id"]
+    
+
+    def __str__(self):
+        return f"{self.doctor} - {self.token_number} - {self.appointment_date}"
+
 
 
 
@@ -148,6 +184,10 @@ class Patient(models.Model):
 
 
 
+
+
+
+
 class Appointment(models.Model):
     APPOINTMENT_STATUS = (
         ('pending', 'Pending'),
@@ -167,11 +207,13 @@ class Appointment(models.Model):
     status = models.CharField(max_length=20, choices=APPOINTMENT_STATUS, default='pending')
     reason = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    appointment_duration = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 
     class Meta:
+        unique_together = ('doctor', 'appointment_date', 'token_number')
         db_table = 'patient_appointments'
         verbose_name = 'patient appointment'
         verbose_name_plural = 'patient appointments'

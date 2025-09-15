@@ -2,13 +2,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from api.v1.common.permissions import IsReceptionist
-
-
+from rest_framework import status
 from django.contrib.auth import authenticate
+
+
 from .serializers import *
+from api.v1.common.permissions import IsReceptionist
 from api.v1.common.serializers import *
 from receptionist.models import *
+from hospital.views import generate_token
 
 
 
@@ -62,3 +64,31 @@ def receptionist_register(request):
             return Response({"status_code": 6000, "message": "User created successfully"})
         
     return Response({"status_code": 6001, "error": serializer.errors})
+
+
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsReceptionist])
+def create_doctor_availability(request):
+    serializer = DoctorAvailabilitySerializer(data = request.data)
+    if serializer.is_valid():
+        availability = serializer.save()
+
+
+        tokens_created = generate_token(availability)
+
+        return Response({
+            "status_code": 6000,
+            "message": "Availability created successfully",
+            "availability": serializer.data,
+            "tokens_created": len(tokens_created)
+        })
+
+    return Response({"status_code": 6001, "error": serializer.errors})
+
+
+
+
+        
