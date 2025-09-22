@@ -48,6 +48,8 @@ def doctor_register(request):
             return Response({"status_code": 6002, "message": "You are not authorized to register as a doctor"})
         
         else:
+            department = DoctorsInHospital.objects.get(email=email).department
+            
             user = User.objects.create_user(
                 email=serializer.validated_data['email'],
                 first_name=serializer.validated_data.get('first_name'),
@@ -58,7 +60,7 @@ def doctor_register(request):
             )
             Doctor.objects.create(
                 user=user,
-                license_number=license_number
+                department=department
             )
             return Response({"status_code": 6000, "message": "User created successfully"})
         

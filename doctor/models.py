@@ -6,7 +6,8 @@ from users.models import User
 
 class Doctor(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    license_number = models.CharField(max_length=50)
+    profile_image = models.FileField(upload_to='doctor_image', null=True, blank=True)
+    department = models.ForeignKey("hospital.Department", on_delete=models.SET_NULL, null=True, blank=True)
 
 
 
@@ -19,8 +20,12 @@ class Doctor(models.Model):
 
 
     def __str__(self):
-        return f"{self.user.email} ({self.license_number})"
+        return self.user.email
     
+
+
+
+
 
 
 
@@ -30,3 +35,15 @@ class Leave(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     reason = models.TextField(blank=True)
+
+
+    class Meta:
+        db_table = 'doctors_leave'
+        verbose_name = 'leave'
+        verbose_name_plural = 'leaves'
+        ordering = ["-id"]
+
+
+
+    def __str__(self):
+        return self.doctor.user.email

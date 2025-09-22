@@ -1,6 +1,39 @@
 from django.db import models
 from datetime import datetime, timedelta, date
-from doctor.models import *
+from doctor.models import Doctor
+from users.models import User
+
+
+
+
+
+
+class Department(models.Model):
+    logo = models.FileField(upload_to='department_logo')
+    image = models.FileField(upload_to='department_image')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    base_fee = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+    class Meta:
+        db_table = 'hospital_departments'
+        verbose_name = 'hospital department'
+        verbose_name_plural = 'hospital departments'
+        ordering = ["-id"]
+
+
+    def __str__(self):
+        return self.name
+
+
+
+
+
+    
+
+
+
 
 
 
@@ -50,7 +83,8 @@ class DoctorsInHospital(models.Model):
     email = models.EmailField(unique=True)
     license_number = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
-    department = models.CharField(max_length=100)
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, help_text="Doctor fee")
     active = models.BooleanField(default=True)
 
 
@@ -119,6 +153,7 @@ class DoctorAvailability(models.Model):
 
 class Token(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="tokens")
+    departemnt = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="tokens")
     appointment_date = models.DateField()
     token_number = models.CharField(max_length=20)
     start_time = models.TimeField()
@@ -150,6 +185,7 @@ class Token(models.Model):
 
 
 class Patient(models.Model):
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     age = models.IntegerField()
@@ -198,12 +234,13 @@ class Appointment(models.Model):
     )
 
 
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
-    patient  = models.ForeignKey(Patient, on_delete=models.CASCADE)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="appointments")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="appointments")
+    token_number = models.OneToOneField(Token, on_delete=models.CASCADE, related_name="appointment")
     appointment_date = models.DateField()
     start_time = models.TimeField()
     end_time = models.TimeField()
-    token_number = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=APPOINTMENT_STATUS, default='pending')
     reason = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
@@ -704,3 +741,42 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for Bill #{self.bill.id} - {self.status}"
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Contact(models.Model):
+    name = models.CharField(max_length=200)
+    primary_phone = models.CharField(max_length=15)
+    emergency_phone = models.CharField(max_length=15)
+    address = models.CharField(max_length=300)
+    city = models.CharField(max_length=100)
+    postal_code = models.IntegerField()
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    class Meta:
+        db_table = 'hospital_contacts'
+        verbose_name = 'hospital contact'
+        verbose_name_plural = 'hospital contacts'
+        ordering = ["-id"]
+
+
+    def __str__(self):
+        return f'{self.name} - {self.address}'

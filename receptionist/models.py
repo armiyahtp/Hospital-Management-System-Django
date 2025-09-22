@@ -1,5 +1,6 @@
 from django.db import models
 from users.models import User
+from hospital.models import Department
 
 
 
@@ -9,7 +10,7 @@ class ApprovedReceptionist(models.Model):
     email = models.EmailField(unique=True)
     license_number = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
-    department = models.CharField(max_length=100)
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
 
 
 

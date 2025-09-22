@@ -4,6 +4,9 @@ from rest_framework import serializers
 
 from django.contrib.auth import get_user_model
 
+from hospital.models import *
+from customer.models import Testimonial
+
 User = get_user_model()
 
 class CustomerRegisterSerializer(ModelSerializer):
@@ -18,3 +21,34 @@ class CustomerRegisterSerializer(ModelSerializer):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords don't match")
         return data
+    
+
+
+
+
+class DepartmentSerializer(ModelSerializer):
+    class Meta:
+        model = Department
+        fields = ('logo', 'image', 'name', 'description', 'base_fee')
+
+
+
+
+
+
+class DoctorSerializer(ModelSerializer):
+    class Meta:
+        model = Doctor
+        fields = ('user', 'profile_image', 'department', 'availabilities', 'appointments', 'tokens')
+
+
+
+
+
+
+
+
+class TestimonialSerializer(ModelSerializer):
+    class Meta:
+        model = Testimonial
+        fields = ('patient', 'service', 'rating', 'description')
