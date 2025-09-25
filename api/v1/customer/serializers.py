@@ -26,10 +26,29 @@ class CustomerRegisterSerializer(ModelSerializer):
 
 
 
+
+
+class HospitalSerializer(ModelSerializer):
+    class Meta:
+        model = Hospital
+        fields = ('logo', 'name', 'address', 'city', 'postal_code', 'registration_fee', 'latitude', 'longitude', 'is_active')
+    
+
+
+
+
+
+
+
+
 class DepartmentSerializer(ModelSerializer):
+    hospital = HospitalSerializer()
     class Meta:
         model = Department
-        fields = ('logo', 'image', 'name', 'description', 'base_fee')
+        fields = ('hospital', 'logo', 'description', 'name')
+
+
+
 
 
 
@@ -52,3 +71,22 @@ class TestimonialSerializer(ModelSerializer):
     class Meta:
         model = Testimonial
         fields = ('patient', 'service', 'rating', 'description')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class ContactSerializer(ModelSerializer):
+    hospital = HospitalSerializer()
+    class Meta:
+        model = Contact
+        fields = ('hospital', 'primary_phone', 'emergency_phone', 'is_active')

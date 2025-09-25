@@ -1,5 +1,6 @@
 from django.db import models
 from datetime import datetime, timedelta, date
+from django.utils import timezone
 from doctor.models import Doctor
 from users.models import User
 
@@ -8,12 +9,46 @@ from users.models import User
 
 
 
+
+class Hospital(models.Model):
+    logo = models.FileField(upload_to='hospital_logo')
+    name = models.CharField(max_length=200)
+    address = models.CharField(max_length=300)
+    city = models.CharField(max_length=100)
+    postal_code = models.IntegerField()
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    latitude = models.FloatField(null=True,blank=True)
+    longitude = models.FloatField(null=True,blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+
+
+    class Meta:
+        db_table = 'hospital_details'
+        verbose_name = 'hospital detail'
+        verbose_name_plural = 'hospital details'
+        ordering = ["-id"]
+
+
+    def __str__(self):
+        return f'{self.name} - {self.address}'
+
+
+
+
+
+
+
+
+
 class Department(models.Model):
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
     logo = models.FileField(upload_to='department_logo')
-    image = models.FileField(upload_to='department_image')
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
-    base_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.CharField(max_length=100, null=True, blank=True)
 
 
     class Meta:
@@ -43,16 +78,14 @@ class Department(models.Model):
 
 
 class Room(models.Model):
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
     ROOM_TYPES = [
-        ("GENERAL", "General Ward"),
-        ("SEMI", "Semi-Private"),
         ("PRIVATE", "Private Room"),
-        ("ICU", "ICU"),
         ("DELUXE", "Deluxe Room"),
     ]
 
-    room_number = models.CharField(max_length=10, unique=True)
-    room_type = models.CharField(max_length=20, choices=ROOM_TYPES, default="GENERAL")
+    room_number = models.CharField(max_length=10, unique=True, null=True, blank=True)
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPES, default="PRIVATE")
     daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
     is_occupied = models.BooleanField(default=False)
 
@@ -79,7 +112,150 @@ class Room(models.Model):
 
 
 
+
+
+class ICU(models.Model):
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
+    ICU_TYPE_CHOICES = (
+        ("MICU", "Medical ICU"), 
+        ("SICU", "Surgical ICU"), 
+        ("CCU", "Cardiac ICU"),     
+    )
+    name = models.CharField(max_length=100) 
+    icu_type = models.CharField(max_length=20, choices=ICU_TYPE_CHOICES)
+    floor = models.IntegerField(default=0)
+    total_beds = models.PositiveIntegerField(default=1)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'hospital_icus'
+        verbose_name = 'hospital icu'
+        verbose_name_plural = 'hospital icus'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"{self.get_icu_type_display()} ({self.name})"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class ICUBed(models.Model):
+    icu = models.ForeignKey(ICU, related_name="icubeds", on_delete=models.CASCADE)
+    bed_number = models.CharField(max_length=20)
+    is_available = models.BooleanField(default=True)
+
+    has_ventilator = models.BooleanField(default=False)
+    has_monitor = models.BooleanField(default=True)
+    has_oxygen_supply = models.BooleanField(default=True)
+
+    notes = models.TextField(blank=True)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        db_table = 'icu_bed'
+        verbose_name = 'icu bed'
+        verbose_name_plural = 'icu beds'
+        ordering = ["-id"]
+
+    class Meta:
+        unique_together = ("icu", "bed_number")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class GeneralWard(models.Model):
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100, unique=True)
+    total_beds = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'hospital_generals'
+        verbose_name = 'hospital general'
+        verbose_name_plural = 'hospital generals'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"{self.name} ({self.ward_type})"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class GeneralWardBed(models.Model):
+    ward = models.ForeignKey(GeneralWard, related_name="beds", on_delete=models.CASCADE)
+    bed_number = models.CharField(max_length=10)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2) 
+    is_available = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'general_beds'
+        verbose_name = 'general bed'
+        verbose_name_plural = 'general beds'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"{self.ward.name} - Bed {self.bed_number} ({'Available' if self.is_available else 'Occupied'})"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class DoctorsInHospital(models.Model):
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
     email = models.EmailField(unique=True)
     license_number = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
@@ -226,7 +402,6 @@ class Patient(models.Model):
 
 class Appointment(models.Model):
     APPOINTMENT_STATUS = (
-        ('pending', 'Pending'),
         ('confirmed', 'Confirmed'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
@@ -241,7 +416,7 @@ class Appointment(models.Model):
     appointment_date = models.DateField()
     start_time = models.TimeField()
     end_time = models.TimeField()
-    status = models.CharField(max_length=20, choices=APPOINTMENT_STATUS, default='pending')
+    status = models.CharField(max_length=20, choices=APPOINTMENT_STATUS, default='confirmed')
     reason = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     appointment_duration = models.IntegerField(default=0)
@@ -323,6 +498,61 @@ class PrescriptionItem(models.Model):
 
 
 
+class Admission(models.Model):
+    ADMISSION_STATUS = (
+        ("ADMITTED", "Admitted"),
+        ("DISCHARGED", "Discharged"),
+        ("CANCELLED", "Cancelled"),
+    )
+    patient = models.ForeignKey(Patient, related_name="admissions", on_delete=models.CASCADE)
+    admitting_doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
+    reason = models.TextField(blank=True)
+
+    
+    icu = models.ForeignKey(ICU, null=True, blank=True, on_delete=models.SET_NULL)
+    icu_bed = models.ForeignKey(ICUBed, null=True, blank=True, on_delete=models.SET_NULL)
+
+    ward = models.ForeignKey(GeneralWard, null=True, blank=True, on_delete=models.SET_NULL)
+    ward_bed = models.ForeignKey(GeneralWardBed, null=True, blank=True, on_delete=models.SET_NULL)
+    
+    room = models.ForeignKey(Room, null=True, blank=True, on_delete=models.SET_NULL)
+
+    admit_datetime = models.DateTimeField(default=timezone.now)
+    discharge_datetime = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=15, choices=ADMISSION_STATUS, default="ADMITTED")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'hospital_admissions'
+        verbose_name = 'hospital admission'
+        verbose_name_plural = 'hospital admissions'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"Admission - {self.patient} ({self.status})"
+    
+    @property
+    def days_of_stay(self):
+        if self.discharge_datetime:
+            return (self.discharge_datetime - self.admit_datetime).days or 1
+        return (timezone.now() - self.admit_datetime).days or 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -370,6 +600,7 @@ class AppointmentBill(models.Model):
         ordering = ["-id"]
 
 
+    @property
     def update_totals(self):
         self.medicines_total = sum(m.total_price for m in self.medicine_items.all())
         self.tests_total = sum(t.total_price for t in self.test_items.all())
@@ -424,7 +655,7 @@ class BillMedicineItem(models.Model):
     def save(self, *args, **kwargs):
         self.total_price = self.quantity * self.unit_price
         super().save(*args, **kwargs)
-        self.bill.update_totals()
+        self.bill.update_totals
 
 
     def __str__(self):
@@ -556,8 +787,7 @@ class BillIntravenousItem(models.Model):
 
 class BillRoomItem(models.Model):
     bill = models.ForeignKey(AppointmentBill, on_delete=models.CASCADE, related_name="room_items")
-    room = models.ForeignKey(Room, on_delete=models.CASCADE)
-    days = models.IntegerField(default=1)
+    admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
 
@@ -569,13 +799,32 @@ class BillRoomItem(models.Model):
 
 
     def save(self, *args, **kwargs):
-        self.total_price = self.days * self.room.daily_rate
+        self.total_price = self.calculate_total()
         super().save(*args, **kwargs)
         self.bill.update_totals()
 
+    def calculate_total(self):
+        days = self.admission.days_of_stay
+
+        if self.admission.icu and self.admission.icu_bed:
+            return days * self.admission.icu_bed.daily_rate
+
+        if self.admission.ward and self.admission.ward_bed:
+            return days * self.admission.ward_bed.daily_rate
+
+        if self.admission.room:
+            return days * self.admission.room.daily_rate
+        
+        return 0
 
     def __str__(self):
-        return f"{self.room.get_room_type_display()} - {self.days} days"
+        if self.admission.icu:
+            return f"ICU - {self.admission.days_of_stay} days"
+        if self.admission.ward:
+            return f"General Ward - {self.admission.days_of_stay} days"
+        if self.admission.room:
+            return f"Room - {self.admission.days_of_stay} days"
+        return f"Admission Bill - {self.admission.days_of_stay} days"
 
 
 
@@ -758,14 +1007,9 @@ class Payment(models.Model):
 
 
 class Contact(models.Model):
-    name = models.CharField(max_length=200)
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
     primary_phone = models.CharField(max_length=15)
     emergency_phone = models.CharField(max_length=15)
-    address = models.CharField(max_length=300)
-    city = models.CharField(max_length=100)
-    postal_code = models.IntegerField()
-    latitude = models.FloatField()
-    longitude = models.FloatField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -779,4 +1023,4 @@ class Contact(models.Model):
 
 
     def __str__(self):
-        return f'{self.name} - {self.address}'
+        return f'{self.hospital.name} - {self.primary_phone}'

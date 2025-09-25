@@ -3,7 +3,8 @@ from .models import *
 
 
 
-
+admin.site.register(Hospital)
+admin.site.register(Department)
 admin.site.register(Room)
 admin.site.register(DoctorsInHospital)
 admin.site.register(DoctorAvailability)
@@ -25,3 +26,5 @@ admin.site.register(BillSurgeryItem)
 admin.site.register(BillNursingItem)
 admin.site.register(BillMiscItem)
 admin.site.register(Payment)
+
+admin.site.register(Contact)

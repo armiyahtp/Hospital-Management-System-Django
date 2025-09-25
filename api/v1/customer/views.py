@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
+from datetime import date
+
+
 from django.contrib.auth import authenticate
 from .serializers import *
 from api.v1.common.serializers import UserSerializer
@@ -48,7 +51,17 @@ def customer_register(request):
             password=serializer.validated_data['password'],
             is_customer=True
         )
-        Customer.objects.create(user=user)
+        dob = request.data.get('dob')
+        gender = request.data.get('gender')
+        place = request.data.get('place')
+        address = request.data.get('address')
+        Customer.objects.create(
+            user=user,
+            dob=dob,
+            gender=gender,
+            place=place,
+            address=address,
+        )
         refresh = RefreshToken.for_user(user)
         return Response({"status_code": 6000, 'access' : str(refresh.access_token), "message": "User created successfully"})
     return Response({"status_code": 6001, "error": serializer.errors})
@@ -136,6 +149,31 @@ def testimonials(request):
 
 
 
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def contact(request):
+    instance = Contact.objects.all().first()
+
+    context = {
+        "request": request
+    }
+
+    serializers = ContactSerializer(instance, context=context)
+
+    return Response({
+        "stats_code":6000,
+        "data": serializers.data
+    })
+
+
+
+
+
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def single_department(request, id):
@@ -196,18 +234,23 @@ def single_doctor(request, id):
 @permission_classes([IsAuthenticated])
 def take_appointment(request, id):
     user = request.user
+    customer = Customer.objects.get(user=user)
     
 
     token = Token.objects.get(id=id)
 
-
+    today = date.today()
+    age = today.year - customer.dob.year - (
+            (today.month, today.day) < (customer.dob.month, customer.dob.day)
+        )
     patient = Patient.objects.create(
+        user = user,
         first_name=user.first_name,
         last_name=user.last_name,
-        age=request.data.get("age", 0),
-        gender=request.data.get("gender", "Other"),
+        age=age,
+        gender=customer.gender,
         phone_number=user.phone_number,
-        place=request.data.get("place", "")
+        place=customer.place
     )
 
 
@@ -247,9 +290,12 @@ def take_appointment(request, id):
 
 
 
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def my_appointments(request):
+def all_appointments(request):
     user = request.user
     patient = Patient.objects.get(user=user)
     
@@ -284,7 +330,126 @@ def my_appointments(request):
             "notes": appt.notes
         })
 
-    return Response(result)
+    return Response({
+        "status_code": 6000,
+        "all_appointments": result
+    })
+
+
+
+
+
+
+
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def latest_appointments(request):
+    user = request.user
+    patient = Patient.objects.get(user=user)
+
+    today = date.today()
+
+    appointments = Appointment.objects.filter(patient=patient).order_by('-appointment_date', '-start_time')
+
+    latest = []
+
+    for appt in appointments:
+        if appt.appointment_date >= today:
+            latest.append({
+                "appointment_id": appt.id,
+                "doctor": {
+                    "id": appt.doctor.id,
+                    "email": appt.doctor.user.email,
+                },
+                "department": {
+                    "id": appt.department.id,
+                    "name": appt.department.name,
+                },
+                "token": {
+                    "id": appt.token_number.id,
+                    "token_number": appt.token_number.token_number,
+                    "appointment_date": appt.token_number.appointment_date,
+                    "start_time": appt.token_number.start_time,
+                    "end_time": appt.token_number.end_time,
+                    "is_booked": appt.token_number.is_booked,
+                },
+                "appointment_date": appt.appointment_date,
+                "start_time": appt.start_time,
+                "end_time": appt.end_time,
+                "status": appt.status,
+                "reason": appt.reason,
+                "notes": appt.notes
+            })
+
+
+    latest = sorted(latest, key=lambda x: (x['appointment_date'], x['start_time']))
+
+    return Response({
+        "status_code": 6000,
+        "latest_appointment": latest,
+    })
+
+
+
+
+
+
+
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pre_appointments(request):
+    user = request.user
+    patient = Patient.objects.get(user=user)
+
+    today = date.today()
+
+    appointments = Appointment.objects.filter(patient=patient).order_by('-appointment_date', '-start_time')
+
+    previous = []
+
+    for appt in appointments:
+        if appt.appointment_date < today:
+            previous.append({
+                "appointment_id": appt.id,
+                "doctor": {
+                    "id": appt.doctor.id,
+                    "email": appt.doctor.user.email,
+                },
+                "department": {
+                    "id": appt.department.id,
+                    "name": appt.department.name,
+                },
+                "token": {
+                    "id": appt.token_number.id,
+                    "token_number": appt.token_number.token_number,
+                    "appointment_date": appt.token_number.appointment_date,
+                    "start_time": appt.token_number.start_time,
+                    "end_time": appt.token_number.end_time,
+                    "is_booked": appt.token_number.is_booked,
+                },
+                "appointment_date": appt.appointment_date,
+                "start_time": appt.start_time,
+                "end_time": appt.end_time,
+                "status": appt.status,
+            })
+
+
+    previous = sorted(previous, key=lambda x: (x['appointment_date'], x['start_time']))
+
+    return Response({
+        "status_code": 6000,
+        "pre_appointment": previous,
+    })
+
+
 
 
 

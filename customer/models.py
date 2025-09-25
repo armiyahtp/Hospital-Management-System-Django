@@ -4,8 +4,17 @@ from users.models import User
 
 
 class Customer(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     profile_image = models.FileField(upload_to='customer_image', null=True, blank=True)
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, choices=[
+        ('Male', 'Male'),
+        ('Female', 'Female'),
+        ('Other', 'Other')
+    ])
+    place = models.CharField(max_length=250, null=True, blank=True)
+    address = models.CharField(max_length=500, null=True, blank=True)
+
 
     class Meta:
         db_table = 'customers_customer'
