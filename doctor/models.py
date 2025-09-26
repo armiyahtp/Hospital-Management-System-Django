@@ -7,7 +7,10 @@ from users.models import User
 class Doctor(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     profile_image = models.FileField(upload_to='doctor_image', null=True, blank=True)
-    department = models.ForeignKey("hospital.Department", on_delete=models.SET_NULL, null=True, blank=True)
+    department = models.ForeignKey("hospital.Department", on_delete=models.SET_NULL, null=True, blank=True, related_name='doctor')
+    description = models.TextField(blank=True, null=True)
+    experience = models.IntegerField(default=0)
+    specialization = models.CharField(max_length=255, blank=True, null=True)
 
 
 

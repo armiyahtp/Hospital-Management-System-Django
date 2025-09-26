@@ -20,33 +20,36 @@ def generate_token(availability):
             tkn = 1
 
 
-            lunch_start = (
-                datetime.combine(date.today(), availability.lunch_start)
-                if availability.lunch_start else None
+            break_start = (
+                datetime.combine(date.today(), availability.break_start)
+                if availability.break_start else None
             )
 
-            lunch_end = (
-                datetime.combine(date.today(), availability.lunch_end)
-                if availability.lunch_end else None
+            break_end = (
+                datetime.combine(date.today(), availability.break_end)
+                if availability.break_end else None
             )
 
             while start_time < end_time:
-                if lunch_start and lunch_end:
+                if break_start and break_end:
                     current_start = datetime.combine(date.today(), start_time)
-                    if lunch_start <= current_start < lunch_end:
-                        start_time = lunch_end.time()
+                    if break_start <= current_start < break_end:
+                        start_time = break_end.time()
                         continue
 
                 formatted = f'TKN0{tkn}'
                 token, created = Token.objects.get_or_create(
                     doctor=availability.doctor,
+                    departemnt=availability.doctor.department, 
                     appointment_date=current_date,
                     token_number=formatted,
                     defaults={
                         "start_time": start_time,
                         "end_time": (
                             (datetime.combine(date.today(), start_time) + timedelta(minutes=duration)).time()
-                        )
+                        ),
+                        "is_booked": False,
+                        "is_canceled": False,
                     }
                 )
                 if created:

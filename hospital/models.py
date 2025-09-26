@@ -302,8 +302,8 @@ class DoctorAvailability(models.Model):
     start_time = models.TimeField() 
     end_time = models.TimeField()
     consult_duration = models.IntegerField(default=10)
-    lunch_start = models.TimeField(blank=True, null=True)
-    lunch_end = models.TimeField(blank=True, null=True)
+    break_start = models.TimeField(blank=True, null=True)
+    break_end = models.TimeField(blank=True, null=True)
         
 
     class Meta:
@@ -445,6 +445,8 @@ class Appointment(models.Model):
 
 
 
+
+
 class Prescription(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="prescriptions")
     appointment = models.ForeignKey(Appointment, on_delete=models.CASCADE, related_name="prescriptions") 
@@ -490,6 +492,8 @@ class PrescriptionItem(models.Model):
 
     def __str__(self):
         return f"{self.medicine} for {self.prescription.patient.first_name} {self.prescription.patient.last_name}"
+
+
 
 
 
@@ -629,6 +633,7 @@ class AppointmentBill(models.Model):
 
     def __str__(self):
         return f"Bill {self.bill_number} - {self.patient.name}"
+
 
 
 

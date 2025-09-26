@@ -115,6 +115,7 @@ def departments(request):
 def doctors(request):
     instances = Doctor.objects.all()
 
+
     context = {
         'request' : request
     }
@@ -208,20 +209,55 @@ def single_department(request, id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def single_doctor(request, id):
+    
     instance = Doctor.objects.get(id=id)
-
-    context = {
-        'request' : request
-    }
-
+    
+    context = {"request": request}
     serializer = DoctorSerializer(instance, context=context)
 
+    available_dates = Token.objects.filter(
+        doctor=instance,
+        is_booked=False,
+        is_canceled=False,
+        appointment_date__gte=date.today()
+    ).values_list("appointment_date", flat=True).distinct().order_by("appointment_date")
+
+    response_data = {
+        "status_code": 6000,
+        "doctor": serializer.data,
+        "available_dates": available_dates
+    }
+
+    appointment_date_str = request.query_params.get("appointment_date")
+    if appointment_date_str:
+        try:
+            appointment_date = datetime.strptime(appointment_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({"detail": "Invalid date format, expected YYYY-MM-DD"}, status=400)
+        tokens = Token.objects.filter(
+            doctor=instance,
+            appointment_date=appointment_date,
+            is_booked=False,
+            is_canceled=False
+        ).order_by("start_time")
+
+        token_data = [
+            {
+                "token_number": t.token_number,
+                "start_time": t.start_time,
+                "end_time": t.end_time,
+                "is_booked": t.is_booked,
+                "is_canceled": t.is_canceled,
+
+            }
+            for t in tokens
+        ]
+        response_data["tokens"] = token_data
 
     return Response({
-        'status_code' : 6000,
-        'data' : serializer.data,
+        "status_code": 6000,
+        "data": response_data
     })
-
 
 
 

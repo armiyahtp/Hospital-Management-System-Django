@@ -1,5 +1,6 @@
 from django.db import models
 from users.models import User
+from hospital.models import Patient
 
 
 
@@ -30,7 +31,7 @@ class Customer(models.Model):
 
 
 class Testimonial(models.Model):
-    patient = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
     service_name = models.CharField(max_length=255)
     rating = models.FloatField()
     description = models.TextField()
@@ -44,4 +45,4 @@ class Testimonial(models.Model):
     
 
     def __str__(self):
-        return self.patient.user.email 
+        return f'{self.patient.first_name} {self.patient.last_name}'

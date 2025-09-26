@@ -11,4 +11,4 @@ User = get_user_model()
 class DoctorAvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorAvailability
-        fields = ["doctor", "weekday", "start_time", "end_time", "consult_duration", "lunch_start", "lunch_end"]
+        fields = ["doctor", "weekday", "start_time", "end_time", "consult_duration", "break_start", "break_end"]
