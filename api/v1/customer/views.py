@@ -114,6 +114,7 @@ def departments(request):
 @permission_classes([AllowAny])
 def doctors(request):
     instances = Doctor.objects.all()
+    departments = Department.objects.all()
 
 
     context = {
@@ -121,8 +122,14 @@ def doctors(request):
     }
 
     serializers = DoctorSerializer(instances, many=True, context=context)
+    department_serializers = DepartmentSerializer(departments, many=True, context=context)
 
-    return Response({'status_code':6000, 'data':serializers.data, 'message':'doctor listed'})
+    return Response({
+        'status_code':6000,
+        'data':serializers.data, 
+        'departments': department_serializers.data,
+        'message':'doctor listed'
+    })
 
 
 
@@ -174,26 +181,23 @@ def contact(request):
 
 
 
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def single_department(request, id):
     instance = Department.objects.get(id=id)
     doctors = Doctor.objects.filter(department=instance)
-    
-
-
 
     context = {
-        "request":request
+        "request": request
     }
 
-    serializer = DepartmentSerializer(instance, context=context)
+    department_serializer = DepartmentSerializer(instance, context=context)
+    doctor_serializer = DoctorSerializer(doctors, many=True, context=context)
 
     return Response({
-        'status_code':6000,
-        'department' : serializer.data,
-        'doctors' : doctors,
+        'status_code': 6000,
+        'department': department_serializer.data,
+        'doctors': doctor_serializer.data, 
     })
 
 
