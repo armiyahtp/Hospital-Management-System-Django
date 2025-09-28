@@ -1,8 +1,11 @@
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import stripe
+from django.utils import timezone
 
 from datetime import date
 
@@ -12,6 +15,10 @@ from .serializers import *
 from api.v1.common.serializers import UserSerializer
 from customer.models import *
 from hospital.models import *
+
+
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 
@@ -77,6 +84,18 @@ def customer_register(request):
 
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def logged_user(request):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    customer_id = customer.id
+
+    return Response({'statuscode':6000, 'customer_id':customer_id, 'message' : 'user and customer id listed sucessfully'})
+
+
+
+
 
 
 
@@ -137,6 +156,12 @@ def doctors(request):
 
 
 
+
+
+
+
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def testimonials(request):
@@ -149,6 +174,68 @@ def testimonials(request):
     serializers = TestimonialSerializer(instances, many=True, context=context)
 
     return Response({'status_code':6000, 'data':serializers.data, 'message':'testimonial listed'})
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_testimonial(request):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
+
+
+    service_name = request.data.get('service_name')
+    rating = request.data.get('rating')
+    description = request.data.get('description')
+
+    Testimonial.objects.create(
+        patient=patient,
+        service_name=service_name,
+        rating=rating,
+        description=description
+    )
+
+    return Response({'status_code':6000, 'message':'testimonial added'})
+
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def edit_testimonial(request, id):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
+
+
+    service_name = request.data.get('service_name')
+    rating = request.data.get('rating')
+    description = request.data.get('description')
+
+    testimonial = Testimonial.objects.get(id=id, patient=patient)
+    testimonial.service_name = service_name
+    testimonial.rating = rating
+    testimonial.description = description
+    testimonial.save()
+
+    return Response({'status_code':6000, 'message':'testimonial updated'})
+
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_testimonial(request, id):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
+
+    testimonial = Testimonial.objects.get(id=id, patient=patient)
+    testimonial.delete()
+
+    return Response({'status_code':6000, 'message':'testimonial deleted'})
+
+
+
 
 
 
@@ -174,6 +261,9 @@ def contact(request):
         "stats_code":6000,
         "data": serializers.data
     })
+
+
+
 
 
 
@@ -270,55 +360,104 @@ def single_doctor(request, id):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def take_appointment(request, id):
-    user = request.user
-    customer = Customer.objects.get(user=user)
-    
+def create_payment_intent(request, token_id):
+    try:
+        token = Token.objects.get(id=token_id)
+        amount = 1000  # Example: fixed amount, replace with dynamic calculation if needed
 
-    token = Token.objects.get(id=id)
-
-    today = date.today()
-    age = today.year - customer.dob.year - (
-            (today.month, today.day) < (customer.dob.month, customer.dob.day)
+        bill = AppointmentBill.objects.create(total_amount=amount)
+        payment = Payment.objects.create(
+            bill=bill,
+            method="card",
+            status="pending",
+            paid_amount=amount
         )
-    patient = Patient.objects.create(
-        user = user,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        age=age,
-        gender=customer.gender,
-        phone_number=user.phone_number,
-        place=customer.place
-    )
+
+        intent = stripe.PaymentIntent.create(
+            amount=int(amount * 100),  # Stripe requires amount in cents
+            currency="usd",
+            payment_method_types=["card"],
+        )
+
+        return Response({"clientSecret": intent.client_secret, "payment_id": payment.id})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
 
 
 
-    appointment = Appointment.objects.create(
-        patient=patient,
-        doctor=token.doctor,
-        department=token.departemnt,
-        token_number=token,
-        appointment_date=token.appointment_date,
-        start_time=token.start_time,
-        end_time=token.end_time,
-        status=request.data.get("status", "pending"),
-        reason=request.data.get("reason", ""),
-        notes=request.data.get("notes", ""),
-    )
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def take_appointment_after_payment(request, token_id):
+    payment_id = request.data.get("payment_id")
+    payment_intent_id = request.data.get("payment_intent_id")
 
+    if not payment_id or not payment_intent_id:
+        return Response({"error": "Payment ID and Payment Intent ID are required"}, status=400)
 
-    token.is_booked = True
-    token.save()
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        if intent.status != "succeeded":
+            return Response({"error": "Payment not completed"}, status=400)
 
-    return Response({
-        "status_code": 6000,
-        "message": "Appointment booked successfully",
-        "appointment": appointment,
-        "patient": patient,
-        "token": token
-    })
+        payment = Payment.objects.get(id=payment_id)
+        payment.status = "completed"
+        payment.transaction_id = payment_intent_id
+        payment.paid_at = timezone.now()
+        payment.save()
+
+        user = request.user
+        customer = Customer.objects.get(user=user)
+        token = Token.objects.get(id=token_id)
+
+        today = date.today()
+        age = today.year - customer.dob.year - (
+                (today.month, today.day) < (customer.dob.month, customer.dob.day)
+            )
+
+        patient = Patient.objects.create(
+            customer=customer,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            age=age,
+            gender=customer.gender,
+            phone_number=user.username,
+            place=customer.place
+        )
+
+        appointment = Appointment.objects.create(
+            patient=patient,
+            doctor=token.doctor,
+            department=token.departemnt,
+            token_number=token,
+            appointment_date=token.appointment_date,
+            start_time=token.start_time,
+            end_time=token.end_time,
+            status="confirmed"
+        )
+
+        token.is_booked = True
+        token.save()
+
+        return Response({
+            "status_code": 6000,
+            "message": "Payment successful & Appointment booked!",
+            "appointment_id": appointment.id
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
 
 
 

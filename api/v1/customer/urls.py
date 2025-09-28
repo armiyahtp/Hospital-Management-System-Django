@@ -8,6 +8,9 @@ urlpatterns = [
     path('register/', views.customer_register, name='customer_register'),
 
 
+    path('user/me/', views.logged_user, name='logged_user'),
+
+
 
 
 
@@ -23,8 +26,9 @@ urlpatterns = [
 
     
     path('testimonials/', views.testimonials, name='testimonials'),
-
-
+    path('testimonial/add/', views.add_testimonial, name='add_testimonial'),
+    path('testimonial/edit/<int:id>/', views.edit_testimonial, name='edit_testimonial'),
+    path('testimonial/delete/<int:id>/', views.delete_testimonial, name='delete_testimonial'),
 
 
     path('appointments/', views.all_appointments, name='all_appointments'),

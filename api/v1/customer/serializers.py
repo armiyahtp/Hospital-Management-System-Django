@@ -42,7 +42,7 @@ class CustomerRegisterSerializer(ModelSerializer):
 class PatientSerializer(ModelSerializer):
     class Meta:
         model = Patient
-        fields = ('first_name',  'last_name', 'age', 'gender', 'phone_number', 'place')
+        fields = ('customer', 'first_name',  'last_name', 'age', 'gender', 'phone_number', 'place')
 
 
 
@@ -92,7 +92,7 @@ class DoctorSerializer(ModelSerializer):
     email = serializers.CharField(source="user.email", read_only=True)
     class Meta:
         model = Doctor
-        fields = ('id', 'email', 'first_name', 'last_name', 'phone_number', 'profile_image', 'department', 'description', 'experience', 'specialization', 'availabilities', 'appointments', 'tokens')
+        fields = ('id', 'email', 'first_name', 'last_name', 'phone_number', 'profile_image', 'department', 'description', 'experience', 'specialization', 'fee', 'availabilities', 'appointments', 'tokens')
 
 
 
@@ -202,7 +202,7 @@ class TestimonialSerializer(ModelSerializer):
     patient = PatientSerializer()
     class Meta:
         model = Testimonial
-        fields = ('patient', 'service_name', 'rating', 'description')
+        fields = ('id', 'patient', 'service_name', 'rating', 'description')
 
 
 
@@ -221,4 +221,4 @@ class ContactSerializer(ModelSerializer):
     hospital = HospitalSerializer()
     class Meta:
         model = Contact
-        fields = ('hospital', 'primary_phone', 'emergency_phone', 'is_active')
+        fields = ('id', 'hospital', 'primary_phone', 'emergency_phone', 'is_active')

@@ -11,6 +11,8 @@ class Doctor(models.Model):
     description = models.TextField(blank=True, null=True)
     experience = models.IntegerField(default=0)
     specialization = models.CharField(max_length=255, blank=True, null=True)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, help_text="Doctor fee", null=True, blank=True)
+    
 
 
 

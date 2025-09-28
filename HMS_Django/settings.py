@@ -1,14 +1,20 @@
 from pathlib import Path
 from datetime import timedelta
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 
-SECRET_KEY = 'django-insecure-zvv-ms(+7c)43n5tw)%_=z=49hd9_jy%u2(qimdn!4yjdo)hu@'
 
-DEBUG = True
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+
 
 ALLOWED_HOSTS = []
 
@@ -76,11 +82,11 @@ WSGI_APPLICATION = 'HMS_Django.wsgi.application'
 DATABASES = {
     'default': {
         "ENGINE" : "django.db.backends.postgresql_psycopg2",
-        "NAME" : "hospital",
-        "HOST" : "localhost",
-        "USER" : "armiyah",
-        "PASSWORD" : "1234",
-        "PORT" : "5432"
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST"),
+        "PORT": os.getenv("DB_PORT"),
     }
 }
 

@@ -1,6 +1,5 @@
 from django.db import models
 from users.models import User
-from hospital.models import Patient
 
 
 
@@ -31,7 +30,7 @@ class Customer(models.Model):
 
 
 class Testimonial(models.Model):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
+    patient = models.ForeignKey("hospital.Patient", on_delete=models.CASCADE)
     service_name = models.CharField(max_length=255)
     rating = models.FloatField()
     description = models.TextField()

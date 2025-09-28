@@ -2,7 +2,7 @@ from django.db import models
 from datetime import datetime, timedelta, date
 from django.utils import timezone
 from doctor.models import Doctor
-from users.models import User
+from customer.models import Customer
 
 
 
@@ -260,7 +260,6 @@ class DoctorsInHospital(models.Model):
     license_number = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
-    fee = models.DecimalField(max_digits=10, decimal_places=2, help_text="Doctor fee")
     active = models.BooleanField(default=True)
 
 
@@ -361,7 +360,7 @@ class Token(models.Model):
 
 
 class Patient(models.Model):
-    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
+    customer = models.OneToOneField(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     age = models.IntegerField()
@@ -566,7 +565,6 @@ class AppointmentBill(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
         ("paid", "Paid"),
-        ("cancelled", "Cancelled"),
     ]
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointment_bills")
@@ -969,7 +967,6 @@ class Payment(models.Model):
         ("cash", "Cash"),
         ("card", "Card"),
         ("upi", "UPI"),
-        ("insurance", "Insurance"),
     )
     PAYMENT_STATUS = (
         ("pending", "Pending"),
