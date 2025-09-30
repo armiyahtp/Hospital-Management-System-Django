@@ -36,6 +36,11 @@ urlpatterns = [
     path('appointments/pre', views.pre_appointments, name='pre_appointments'),
 
 
+    path('appointment/payment/<int:id>/', views.create_payment_intent, name='create_payment_intent'),
+    path('appointment/confirm/<int:id>/', views.take_appointment_after_payment, name='take_appointment_after_payment'),
+
+
+
 
     path('contact/', views.contact, name='contact'),
 ]

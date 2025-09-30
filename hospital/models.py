@@ -3,6 +3,9 @@ from datetime import datetime, timedelta, date
 from django.utils import timezone
 from doctor.models import Doctor
 from customer.models import Customer
+import datetime
+import random
+import string
 
 
 
@@ -346,7 +349,7 @@ class Token(models.Model):
     
 
     def __str__(self):
-        return f"{self.doctor} - {self.token_number} - {self.appointment_date}"
+        return f"{self.doctor.user.first_name} {self.doctor.user.last_name} - {self.token_number} - {self.appointment_date}"
 
 
 
@@ -383,7 +386,11 @@ class Patient(models.Model):
     
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return f"{self.first_name}" 
+        return "Unknown Patient"
     
 
 
@@ -432,7 +439,7 @@ class Appointment(models.Model):
 
 
     def __str__(self):
-        return self.patient
+        return self.patient.first_name + " " + self.patient.last_name + " - " + str(self.appointment_date)
     
 
 
@@ -567,9 +574,10 @@ class AppointmentBill(models.Model):
         ("paid", "Paid"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointment_bills")
+    patient = models.ForeignKey(Patient, on_delete=models.SET_NULL, null=True, blank=True, related_name="appointment_bills")
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True, related_name="bills")
     appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True)
+    token = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True, blank=True)
 
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     medicines_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -589,18 +597,17 @@ class AppointmentBill(models.Model):
     balance_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    bill_number = models.CharField(max_length=100, unique=True)
+    bill_number = models.CharField(max_length=100, unique=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-
     class Meta:
+        unique_together = ("appointment", "bill_number")
         db_table = 'appointment_bills'
         verbose_name = 'appointment bill'
         verbose_name_plural = 'appointment bills'
         ordering = ["-id"]
-
 
     @property
     def update_totals(self):
@@ -629,8 +636,16 @@ class AppointmentBill(models.Model):
         self.balance_due = self.total_amount - self.amount_paid
         self.save()
 
+    def save(self, *args, **kwargs):
+        if not self.bill_number:
+            date_str = datetime.datetime.now().strftime("%Y%m%d")
+            rand_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            self.bill_number = f"BILL-{date_str}-{rand_str}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Bill {self.bill_number} - {self.patient.name}"
+        patient_name = str(self.patient.first_name) if self.patient else "Unknown"
+        return f"Bill {self.bill_number} - {patient_name}"
 
 
 

@@ -4,9 +4,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+
 import stripe
 from django.utils import timezone
 
+import datetime
 from datetime import date
 
 
@@ -325,7 +327,7 @@ def single_doctor(request, id):
     appointment_date_str = request.query_params.get("appointment_date")
     if appointment_date_str:
         try:
-            appointment_date = datetime.strptime(appointment_date_str, "%Y-%m-%d").date()
+            appointment_date = datetime.datetime.strptime(appointment_date_str, "%Y-%m-%d").date()
         except ValueError:
             return Response({"detail": "Invalid date format, expected YYYY-MM-DD"}, status=400)
         tokens = Token.objects.filter(
@@ -337,6 +339,7 @@ def single_doctor(request, id):
 
         token_data = [
             {
+                "id": t.id,
                 "token_number": t.token_number,
                 "start_time": t.start_time,
                 "end_time": t.end_time,
@@ -373,21 +376,26 @@ def single_doctor(request, id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def create_payment_intent(request, token_id):
+def create_payment_intent(request,id):
+    token = Token.objects.get(id=id)
     try:
-        token = Token.objects.get(id=token_id)
-        amount = 1000  # Example: fixed amount, replace with dynamic calculation if needed
+        registration_fee = token.doctor.department.hospital.registration_fee or 0
+        doctor_fee = token.doctor.fee or 0
+        amount = registration_fee + doctor_fee
 
-        bill = AppointmentBill.objects.create(total_amount=amount)
+        bill = AppointmentBill.objects.create(
+            consultation_fee=amount,
+            token=token
+        )
+
         payment = Payment.objects.create(
             bill=bill,
             method="card",
             status="pending",
-            paid_amount=amount
         )
 
         intent = stripe.PaymentIntent.create(
-            amount=int(amount * 100),  # Stripe requires amount in cents
+            amount=int(amount * 100),
             currency="usd",
             payment_method_types=["card"],
         )
@@ -400,7 +408,7 @@ def create_payment_intent(request, token_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def take_appointment_after_payment(request, token_id):
+def take_appointment_after_payment(request, id):
     payment_id = request.data.get("payment_id")
     payment_intent_id = request.data.get("payment_intent_id")
 
@@ -409,33 +417,42 @@ def take_appointment_after_payment(request, token_id):
 
     try:
         intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        if intent.status != "succeeded":
+
+        if intent.status != "succeeded" and not settings.DEBUG:
             return Response({"error": "Payment not completed"}, status=400)
 
+        # Mark payment as completed
         payment = Payment.objects.get(id=payment_id)
         payment.status = "completed"
         payment.transaction_id = payment_intent_id
+        payment.paid_amount = intent.amount_received / 100 if intent.amount_received else 0
         payment.paid_at = timezone.now()
         payment.save()
 
+
         user = request.user
         customer = Customer.objects.get(user=user)
-        token = Token.objects.get(id=token_id)
+        token = Token.objects.get(id=id)
+        appointment_bill = AppointmentBill.objects.get(token=token)
 
         today = date.today()
         age = today.year - customer.dob.year - (
-                (today.month, today.day) < (customer.dob.month, customer.dob.day)
+            (today.month, today.day) < (customer.dob.month, customer.dob.day)
+        )
+
+        try:
+            patient = Patient.objects.get(customer=customer)
+        except Patient.DoesNotExist:
+            patient = Patient.objects.create(
+                customer=customer,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                age=age,
+                gender=customer.gender,
+                phone_number=user.phone_number,
+                place=customer.place
             )
 
-        patient = Patient.objects.create(
-            customer=customer,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            age=age,
-            gender=customer.gender,
-            phone_number=user.username,
-            place=customer.place
-        )
 
         appointment = Appointment.objects.create(
             patient=patient,
@@ -451,13 +468,20 @@ def take_appointment_after_payment(request, token_id):
         token.is_booked = True
         token.save()
 
+        appointment_bill.patient = patient
+        appointment_bill.doctor = token.doctor
+        appointment_bill.appointment = appointment
+        appointment_bill.save()
+
         return Response({
             "status_code": 6000,
             "message": "Payment successful & Appointment booked!",
             "appointment_id": appointment.id
         })
+
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
 
 
 
