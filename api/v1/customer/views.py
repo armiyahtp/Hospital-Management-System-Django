@@ -385,7 +385,6 @@ def create_payment_intent(request,id):
 
         bill = AppointmentBill.objects.create(
             consultation_fee=amount,
-            token=token
         )
 
         payment = Payment.objects.create(
@@ -421,7 +420,7 @@ def take_appointment_after_payment(request, id):
         if intent.status != "succeeded" and not settings.DEBUG:
             return Response({"error": "Payment not completed"}, status=400)
 
-        # Mark payment as completed
+        
         payment = Payment.objects.get(id=payment_id)
         payment.status = "completed"
         payment.transaction_id = payment_intent_id
@@ -433,7 +432,8 @@ def take_appointment_after_payment(request, id):
         user = request.user
         customer = Customer.objects.get(user=user)
         token = Token.objects.get(id=id)
-        appointment_bill = AppointmentBill.objects.get(token=token)
+        bill_id = payment.bill.id
+        appointment_bill = AppointmentBill.objects.get(id=bill_id)
 
         today = date.today()
         age = today.year - customer.dob.year - (
@@ -458,7 +458,7 @@ def take_appointment_after_payment(request, id):
             patient=patient,
             doctor=token.doctor,
             department=token.departemnt,
-            token_number=token,
+            token_number=token.token_number,
             appointment_date=token.appointment_date,
             start_time=token.start_time,
             end_time=token.end_time,

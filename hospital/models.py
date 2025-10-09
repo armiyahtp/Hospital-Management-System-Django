@@ -72,6 +72,23 @@ class Department(models.Model):
 
 
 
+class Facility(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+
+
+    class Meta:
+        db_table = 'room_facilities'
+        verbose_name = 'room facility'
+        verbose_name_plural = 'room facilities'
+        ordering = ["-id"]
+
+
+    def __str__(self):
+        return self.name
+
+
+
 
 
 
@@ -89,6 +106,7 @@ class Room(models.Model):
 
     room_number = models.CharField(max_length=10, unique=True, null=True, blank=True)
     room_type = models.CharField(max_length=20, choices=ROOM_TYPES, default="PRIVATE")
+    facilities = models.ManyToManyField(Facility, related_name="rooms", blank=True)
     daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
     is_occupied = models.BooleanField(default=False)
 
@@ -101,7 +119,7 @@ class Room(models.Model):
 
 
     def __str__(self):
-        return f"{self.get_room_type_display()} - {self.room_number}"
+        return f"{self.get_room_type_display()} - {self.room_number} ({'Occupied' if self.is_occupied else 'Available'})"
 
 
 
@@ -122,7 +140,7 @@ class ICU(models.Model):
     ICU_TYPE_CHOICES = (
         ("MICU", "Medical ICU"), 
         ("SICU", "Surgical ICU"), 
-        ("CCU", "Cardiac ICU"),     
+        ("CICU", "Cardiac ICU"),     
     )
     name = models.CharField(max_length=100) 
     icu_type = models.CharField(max_length=20, choices=ICU_TYPE_CHOICES)
@@ -165,7 +183,7 @@ class ICUBed(models.Model):
     has_oxygen_supply = models.BooleanField(default=True)
 
     notes = models.TextField(blank=True)
-    daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    rate_per_hour = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
         db_table = 'icu_bed'
@@ -176,6 +194,8 @@ class ICUBed(models.Model):
     class Meta:
         unique_together = ("icu", "bed_number")
 
+    def __str__(self):
+        return f"{self.icu.name} - Bed {self.bed_number} ({'Available' if self.is_available else 'Occupied'})"
 
 
 
@@ -200,6 +220,7 @@ class ICUBed(models.Model):
 class GeneralWard(models.Model):
     hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
     name = models.CharField(max_length=100, unique=True)
+    floor = models.IntegerField(default=0)
     total_beds = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -209,7 +230,7 @@ class GeneralWard(models.Model):
         ordering = ["-id"]
 
     def __str__(self):
-        return f"{self.name} ({self.ward_type})"
+        return f"{self.name} - {self.total_beds} beds"
 
 
 
@@ -228,7 +249,9 @@ class GeneralWard(models.Model):
 class GeneralWardBed(models.Model):
     ward = models.ForeignKey(GeneralWard, related_name="beds", on_delete=models.CASCADE)
     bed_number = models.CharField(max_length=10)
-    daily_rate = models.DecimalField(max_digits=10, decimal_places=2) 
+    rate_per_hour = models.DecimalField(max_digits=10, decimal_places=2) 
+    has_monitor = models.BooleanField(default=True)
+    has_oxygen_supply = models.BooleanField(default=True)
     is_available = models.BooleanField(default=True)
 
     class Meta:
@@ -418,7 +441,7 @@ class Appointment(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="appointments")
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="appointments")
-    token_number = models.OneToOneField(Token, on_delete=models.CASCADE, related_name="appointment")
+    token_number = models.CharField(max_length=20)
     appointment_date = models.DateField()
     start_time = models.TimeField()
     end_time = models.TimeField()
@@ -456,6 +479,7 @@ class Appointment(models.Model):
 class Prescription(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="prescriptions")
     appointment = models.ForeignKey(Appointment, on_delete=models.CASCADE, related_name="prescriptions") 
+    title = models.CharField(max_length=255, blank=True, null=True, help_text="e.g., Prescription for Flu")
     notes = models.TextField(blank=True, null=True, help_text="Doctor's additional notes or instructions")
     duration = models.CharField(max_length=100, blank=True, null=True, help_text="e.g., 5 days")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -471,7 +495,7 @@ class Prescription(models.Model):
     def __str__(self):
         return f"Prescription for {self.patient.first_name} {self.patient.last_name} (Appt #{self.appointment.id})"
     
-
+ 
 
 
 
@@ -483,13 +507,13 @@ class Prescription(models.Model):
 
 class PrescriptionItem(models.Model):
     prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name="items")
-    medicine = models.CharField(max_length=255)
-    dosage = models.CharField(max_length=100, help_text="e.g., 500mg")
-    frequency = models.CharField(max_length=100, help_text="e.g., twice daily")
+    medicine = models.CharField(max_length=255, null=True, blank=True)
+    dosage = models.CharField(max_length=100, help_text="e.g., 500mg", null=True, blank=True)
+    frequency = models.CharField(max_length=100, help_text="e.g., twice daily", null=True, blank=True)
     instructions = models.TextField(blank=True, null=True, help_text="Additional instructions if any")
 
 
-    class Meta:
+    class Meta: 
         db_table = 'prescription_items'
         verbose_name = ' prescription item'
         verbose_name_plural = ' prescription items'
@@ -577,7 +601,7 @@ class AppointmentBill(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.SET_NULL, null=True, blank=True, related_name="appointment_bills")
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True, related_name="bills")
     appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True)
-    token = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True, blank=True)
+    
 
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     medicines_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)

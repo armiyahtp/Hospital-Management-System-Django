@@ -120,7 +120,7 @@ class TokenSerializer(ModelSerializer):
     departemnt = DepartmentSerializer()
     class Meta:
         model = Token
-        fields = ('doctor', 'departemnt', 'appointment_date', 'token_number', 'start_time', 'end_time', 'is_booked', 'is_canceled')
+        fields = ('id', 'doctor', 'departemnt', 'appointment_date', 'token_number', 'start_time', 'end_time', 'is_booked', 'is_canceled')
 
 
 

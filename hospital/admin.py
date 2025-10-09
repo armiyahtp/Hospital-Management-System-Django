@@ -5,7 +5,14 @@ from .models import *
 
 admin.site.register(Hospital)
 admin.site.register(Department)
+
+admin.site.register(Facility)
 admin.site.register(Room)
+admin.site.register(ICU)
+admin.site.register(ICUBed)
+admin.site.register(GeneralWard)
+admin.site.register(GeneralWardBed)
+
 admin.site.register(DoctorsInHospital)
 admin.site.register(DoctorAvailability)
 

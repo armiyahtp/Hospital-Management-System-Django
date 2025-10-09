@@ -30,6 +30,7 @@ class Customer(models.Model):
 
 
 class Testimonial(models.Model):
+    doctor = models.ForeignKey("doctor.Doctor", on_delete=models.SET_NULL, null=True, blank=True)
     patient = models.ForeignKey("hospital.Patient", on_delete=models.CASCADE)
     service_name = models.CharField(max_length=255)
     rating = models.FloatField()
