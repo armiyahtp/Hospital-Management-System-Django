@@ -6,6 +6,7 @@ from customer.models import Customer
 import datetime
 import random
 import string
+import math
 
 
 
@@ -354,7 +355,7 @@ class DoctorAvailability(models.Model):
 
 class Token(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="tokens")
-    departemnt = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="tokens")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="tokens")
     appointment_date = models.DateField()
     token_number = models.CharField(max_length=20)
     start_time = models.TimeField()
@@ -366,7 +367,7 @@ class Token(models.Model):
     class Meta:
         unique_together = ('doctor', 'appointment_date', 'token_number')
         db_table = 'tokens'
-        verbose_name = 'token'
+        verbose_name = 'token' 
         verbose_name_plural = 'tokens'
         ordering = ["-id"]
     
@@ -438,6 +439,7 @@ class Appointment(models.Model):
     )
 
 
+    token = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True, blank=True, related_name="appointments")
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="appointments")
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="appointments")
@@ -486,6 +488,7 @@ class Prescription(models.Model):
 
 
     class Meta:
+        unique_together = ('patient', 'appointment')
         db_table = 'patient_prescriptions'
         verbose_name = 'patient prescription'
         verbose_name_plural = 'patient prescriptions'
@@ -514,6 +517,7 @@ class PrescriptionItem(models.Model):
 
 
     class Meta: 
+        unique_together = ('prescription', 'medicine', 'dosage', 'frequency')
         db_table = 'prescription_items'
         verbose_name = ' prescription item'
         verbose_name_plural = ' prescription items'
@@ -530,6 +534,30 @@ class PrescriptionItem(models.Model):
 
 
 
+class AdmissionRequest(models.Model):
+    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name="admission_requests")
+    doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
+    reason = models.TextField(blank=True)
+    preferred_icu = models.ForeignKey(ICU, null=True, blank=True, on_delete=models.SET_NULL)
+    preferred_ward = models.ForeignKey(GeneralWard, null=True, blank=True, on_delete=models.SET_NULL)
+    preferred_room = models.ForeignKey(Room, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'admission_requests'
+        verbose_name = 'admission request'
+        verbose_name_plural = 'admission requests'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"Admission Request - {self.patient} ({self.status})"
+
+
+
+
+
+
 
 
 class Admission(models.Model):
@@ -538,22 +566,23 @@ class Admission(models.Model):
         ("DISCHARGED", "Discharged"),
         ("CANCELLED", "Cancelled"),
     )
-    patient = models.ForeignKey(Patient, related_name="admissions", on_delete=models.CASCADE)
-    admitting_doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
+
+    patient = models.ForeignKey(Patient, related_name="admissions", on_delete=models.SET_NULL, null=True, blank=True)
+    admitting_request = models.ForeignKey(AdmissionRequest, on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField(blank=True)
 
-    
     icu = models.ForeignKey(ICU, null=True, blank=True, on_delete=models.SET_NULL)
     icu_bed = models.ForeignKey(ICUBed, null=True, blank=True, on_delete=models.SET_NULL)
 
     ward = models.ForeignKey(GeneralWard, null=True, blank=True, on_delete=models.SET_NULL)
     ward_bed = models.ForeignKey(GeneralWardBed, null=True, blank=True, on_delete=models.SET_NULL)
-    
+
     room = models.ForeignKey(Room, null=True, blank=True, on_delete=models.SET_NULL)
 
     admit_datetime = models.DateTimeField(default=timezone.now)
     discharge_datetime = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=15, choices=ADMISSION_STATUS, default="ADMITTED")
+    is_emergency = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -567,12 +596,17 @@ class Admission(models.Model):
 
     def __str__(self):
         return f"Admission - {self.patient} ({self.status})"
-    
+
     @property
-    def days_of_stay(self):
-        if self.discharge_datetime:
-            return (self.discharge_datetime - self.admit_datetime).days or 1
-        return (timezone.now() - self.admit_datetime).days or 1
+    def stay_duration_value(self):
+        end_time = self.discharge_datetime or timezone.now()
+        delta = end_time - self.admit_datetime
+        total_hours = delta.total_seconds() / 3600
+
+        if total_hours < 24:
+            return {"type": "hours", "value": round(total_hours, 2)}
+        else:
+            return {"type": "days", "value": round(total_hours / 24, 2)}
 
 
 
@@ -658,6 +692,7 @@ class AppointmentBill(models.Model):
         net = self.subtotal - self.discount + self.tax
         self.total_amount = max(net, 0)
         self.balance_due = self.total_amount - self.amount_paid
+        self.status = 'paid' if self.balance_due <= 0 else 'pending'
         self.save()
 
     def save(self, *args, **kwargs):
@@ -688,6 +723,7 @@ class BillMedicineItem(models.Model):
 
 
     class Meta:
+        unique_together = ('bill', 'medicine_name')
         db_table = 'medicine_bills'
         verbose_name = 'medicine bill'
         verbose_name_plural = 'medicine bills'
@@ -724,6 +760,7 @@ class BillTestItem(models.Model):
 
 
     class Meta:
+        unique_together = ('bill', 'test_name')
         db_table = 'test_bills'
         verbose_name = 'test bill'
         verbose_name_plural = 'test bills'
@@ -760,6 +797,7 @@ class BillInjectionItem(models.Model):
 
 
     class Meta:
+        unique_together = ('bill', 'injection_name')
         db_table = 'injection_bills'
         verbose_name = 'injection bill'
         verbose_name_plural = 'injection bills'
@@ -798,6 +836,7 @@ class BillIntravenousItem(models.Model):
 
 
     class Meta:
+        unique_together = ('bill', 'iv_name')
         db_table = 'iv_bills'
         verbose_name = 'iv bill'
         verbose_name_plural = 'iv bills'
@@ -832,13 +871,12 @@ class BillRoomItem(models.Model):
     admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-
     class Meta:
+        unique_together = ('bill', 'admission')
         db_table = 'room_bills'
         verbose_name = 'room bill'
         verbose_name_plural = 'room bills'
         ordering = ["-id"]
-
 
     def save(self, *args, **kwargs):
         self.total_price = self.calculate_total()
@@ -846,30 +884,36 @@ class BillRoomItem(models.Model):
         self.bill.update_totals()
 
     def calculate_total(self):
-        days = self.admission.days_of_stay
+        duration = self.admission.stay_duration_value
+        total = 0
 
         if self.admission.icu and self.admission.icu_bed:
-            return days * self.admission.icu_bed.daily_rate
+            rate = self.admission.icu_bed.rate_per_hour
+            total = duration["value"] * rate if duration["type"] == "hours" else duration["value"] * rate * 24
 
-        if self.admission.ward and self.admission.ward_bed:
-            return days * self.admission.ward_bed.daily_rate
+        elif self.admission.ward and self.admission.ward_bed:
+            rate = self.admission.ward_bed.rate_per_hour
+            total = duration["value"] * rate if duration["type"] == "hours" else duration["value"] * rate * 24
 
-        if self.admission.room:
-            return days * self.admission.room.daily_rate
-        
-        return 0
+        elif self.admission.room:
+            rate = self.admission.room.daily_rate
+            if duration["type"] == "hours":
+                total = math.ceil(duration["value"] / 24) * rate
+            else:
+                total = duration["value"] * rate
+
+        return round(total, 2)
 
     def __str__(self):
+        duration = self.admission.stay_duration_value
+        value = f'{duration["value"]} {duration["type"]}'
         if self.admission.icu:
-            return f"ICU - {self.admission.days_of_stay} days"
+            return f"ICU - {value}"
         if self.admission.ward:
-            return f"General Ward - {self.admission.days_of_stay} days"
+            return f"General Ward - {value}"
         if self.admission.room:
-            return f"Room - {self.admission.days_of_stay} days"
-        return f"Admission Bill - {self.admission.days_of_stay} days"
-
-
-
+            return f"Room - {value}"
+        return f"Admission Bill - {value}"
 
 
 
@@ -885,7 +929,6 @@ class BillRoomItem(models.Model):
 class BillSurgeryItem(models.Model):
     bill = models.ForeignKey(AppointmentBill, on_delete=models.CASCADE, related_name="surgery_items")
     surgery_name = models.CharField(max_length=255)
-    surgeon_name = models.CharField(max_length=255, null=True, blank=True)
     ot_hours = models.DecimalField(max_digits=5, decimal_places=2, default=1)
     ot_charge_per_hour = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     surgeon_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -913,7 +956,7 @@ class BillSurgeryItem(models.Model):
 
 
     def __str__(self):
-        return f"{self.surgery_name} - {self.surgeon_name or 'N/A'}"
+        return f"{self.surgery_name} - {self.ot_hours}"
 
 
 
@@ -931,13 +974,14 @@ class BillSurgeryItem(models.Model):
 
 class BillNursingItem(models.Model):
     bill = models.ForeignKey(AppointmentBill, on_delete=models.CASCADE, related_name="nursing_items")
-    description = models.CharField(max_length=255) 
+    nursing_care = models.CharField(max_length=255) 
     visits = models.IntegerField(default=1)  
     charge_per_visit = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
 
     class Meta:
+        unique_together = ('bill', 'nursing_care')
         db_table = 'visit_bills'
         verbose_name = 'visit bill'
         verbose_name_plural = 'visit bills'
@@ -951,7 +995,7 @@ class BillNursingItem(models.Model):
 
 
     def __str__(self):
-        return f"{self.description} - {self.visits} visits"
+        return f"{self.nursing_care} - {self.visits} visits"
 
 
 
@@ -971,11 +1015,13 @@ class BillNursingItem(models.Model):
 class BillMiscItem(models.Model):
     bill = models.ForeignKey(AppointmentBill, on_delete=models.CASCADE, related_name="misc_items")
     description = models.CharField(max_length=255)
-    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
 
     class Meta:
+        unique_together = ('bill', 'description')
         db_table = 'misc_bills'
         verbose_name = 'misc bill'
         verbose_name_plural = 'misc bills'
@@ -983,7 +1029,7 @@ class BillMiscItem(models.Model):
 
 
     def save(self, *args, **kwargs):
-        self.total_price = self.amount
+        self.total_price = self.quantity * self.unit_price
         super().save(*args, **kwargs)
         self.bill.update_totals()
 
@@ -1018,8 +1064,9 @@ class Payment(models.Model):
     method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
     status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default="pending")
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_intent_id = models.CharField(max_length=255, blank=True, null=True)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    paid_at = models.DateTimeField(blank=True, null=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
 
 
     class Meta:
@@ -1030,7 +1077,7 @@ class Payment(models.Model):
 
 
     def __str__(self):
-        return f"Payment for Bill #{self.bill.id} - {self.status}"
+        return f"Payment for Bill #{self.bill.id} - {self.status} {self.id}"
     
 
 

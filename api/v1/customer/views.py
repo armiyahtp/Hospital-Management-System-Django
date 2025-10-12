@@ -3,10 +3,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import status
 
 
 import stripe
 from django.utils import timezone
+from decimal import Decimal
 
 import datetime
 from datetime import date
@@ -43,7 +45,6 @@ def customer_login(request):
 
         return Response({'status_code' : 6000, 'data' : data, 'message' : 'Login Success full'})
     return Response({'status_code' : 6001, 'error' : 'Invalid credentials'})
-
 
 
 
@@ -86,6 +87,7 @@ def customer_register(request):
 
 
 
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def logged_user(request):
@@ -94,6 +96,39 @@ def logged_user(request):
     customer_id = customer.id
 
     return Response({'statuscode':6000, 'customer_id':customer_id, 'message' : 'user and customer id listed sucessfully'})
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def profile(request):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+
+    context = {
+        'request' : request
+    }
+
+    serializer = CustomerSerializer(customer, context=context)
+    return Response({'status_code': 6000, 'data': serializer.data, 'message': 'Profile retrieved successfully'})
+
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+
+    serializer = CustomerSerializer(customer, data=request.data, context={"request": request}, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({'status_code': 6000, 'data': serializer.data, 'message': 'Profile updated successfully'})
+    return Response({'status_code': 6001, 'error': serializer.errors})
+
+
+
+
 
 
 
@@ -374,34 +409,63 @@ def single_doctor(request, id):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_payment_intent(request,id):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
     token = Token.objects.get(id=id)
-    try:
-        registration_fee = token.doctor.department.hospital.registration_fee or 0
-        doctor_fee = token.doctor.fee or 0
-        amount = registration_fee + doctor_fee
+    token_date = token.appointment_date
+    appointment = Appointment.objects.filter(
+        patient=patient,
+        appointment_date=token_date
+    )
+    if appointment.exists():
+        return Response({"error": "You already have an appointment on this date"}, status=400)
 
-        bill = AppointmentBill.objects.create(
-            consultation_fee=amount,
-        )
+    else:
+        try:
+            registration_fee = token.doctor.department.hospital.registration_fee or 0
+            doctor_fee = token.doctor.fee or 0
+            amount = registration_fee + doctor_fee
 
-        payment = Payment.objects.create(
-            bill=bill,
-            method="card",
-            status="pending",
-        )
+            bill = AppointmentBill.objects.create(
+                consultation_fee=amount,
+            )
 
-        intent = stripe.PaymentIntent.create(
-            amount=int(amount * 100),
-            currency="usd",
-            payment_method_types=["card"],
-        )
+            payment = Payment.objects.create(
+                bill=bill,
+                method="card",
+            )
 
-        return Response({"clientSecret": intent.client_secret, "payment_id": payment.id})
-    except Exception as e:
-        return Response({"error": str(e)}, status=400)
+            
+            intent = stripe.PaymentIntent.create(
+                amount=int(amount * 100),
+                currency="usd",
+                payment_method_types=["card"],
+            )
+
+            payment.stripe_intent_id = intent.id
+            payment.save()
+
+            return Response({"clientSecret": intent.client_secret, "payment_id": payment.id})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
 
 
@@ -416,15 +480,17 @@ def take_appointment_after_payment(request, id):
 
     try:
         intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        payment = Payment.objects.get(id=payment_id)
 
         if intent.status != "succeeded" and not settings.DEBUG:
+            payment.status = "failed"
+            payment.save()
             return Response({"error": "Payment not completed"}, status=400)
+            
 
-        
-        payment = Payment.objects.get(id=payment_id)
         payment.status = "completed"
         payment.transaction_id = payment_intent_id
-        payment.paid_amount = intent.amount_received / 100 if intent.amount_received else 0
+        payment.paid_amount = Decimal(intent.amount_received) / Decimal('100') if intent.amount_received else Decimal('0')
         payment.paid_at = timezone.now()
         payment.save()
 
@@ -454,23 +520,30 @@ def take_appointment_after_payment(request, id):
             )
 
 
+        reason = request.data.get("reason", "")
+        notes = request.data.get("notes", "")
         appointment = Appointment.objects.create(
+            token=token,
             patient=patient,
             doctor=token.doctor,
-            department=token.departemnt,
+            department=token.department,
             token_number=token.token_number,
             appointment_date=token.appointment_date,
             start_time=token.start_time,
             end_time=token.end_time,
+            reason=reason,
+            notes=notes,
             status="confirmed"
         )
 
-        token.is_booked = True
+        token.is_booked = True 
         token.save()
 
         appointment_bill.patient = patient
         appointment_bill.doctor = token.doctor
         appointment_bill.appointment = appointment
+        appointment_bill.amount_paid = payment.paid_amount
+        appointment_bill.update_totals
         appointment_bill.save()
 
         return Response({
@@ -479,6 +552,22 @@ def take_appointment_after_payment(request, id):
             "appointment_id": appointment.id
         })
 
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+    
+
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def intent_cancel(request, id):
+    payment = Payment.objects.get(id=id)
+    bill = payment.bill
+    bill.delete()
+    try:
+        if payment.stripe_intent_id:
+            stripe.PaymentIntent.cancel(payment.stripe_intent_id)
+        return Response({"status": "canceled", "intent": payment.stripe_intent_id})
     except Exception as e:
         return Response({"error": str(e)}, status=400)
 
@@ -496,42 +585,29 @@ def take_appointment_after_payment(request, id):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def all_appointments(request):
+def today_appointments(request):
     user = request.user
-    patient = Patient.objects.get(user=user)
-    
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
 
-    appointments = Appointment.objects.filter(patient=patient).order_by('-appointment_date', '-start_time')
+    today = date.today()
+    appointments = Appointment.objects.filter(patient=patient, appointment_date=today).order_by('-appointment_date', '-start_time')
 
-    result = []
-    for appt in appointments:
-        result.append({
-            "appointment_id": appt.id,
-            "doctor": {
-                "id": appt.doctor.id,
-                "email": appt.doctor.user.email,
-            },
-            "department": {
-                "id": appt.department.id,
-                "name": appt.department.name,
-            },
-            "token": {
-                "id": appt.token_number.id,
-                "token_number": appt.token_number.token_number,
-                "appointment_date": appt.token_number.appointment_date,
-                "start_time": appt.token_number.start_time,
-                "end_time": appt.token_number.end_time,
-                "is_booked": appt.token_number.is_booked,
-            },
-            "appointment_date": appt.appointment_date,
-            "start_time": appt.start_time,
-            "end_time": appt.end_time,
-            "status": appt.status,
-            "reason": appt.reason,
-            "notes": appt.notes
-        })
+    serializers = AppointmentSerializer(appointments, many=True)
+    result = serializers.data
 
     return Response({
         "status_code": 6000,
@@ -541,67 +617,23 @@ def all_appointments(request):
 
 
 
-
-
-
-
-
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def latest_appointments(request):
     user = request.user
-    patient = Patient.objects.get(user=user)
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
 
     today = date.today()
 
-    appointments = Appointment.objects.filter(patient=patient).order_by('-appointment_date', '-start_time')
+    appointments = Appointment.objects.filter(patient=patient, appointment_date__gte=today).order_by('-appointment_date', '-start_time')
+    serializers = AppointmentSerializer(appointments, many=True)
 
-    latest = []
-
-    for appt in appointments:
-        if appt.appointment_date >= today:
-            latest.append({
-                "appointment_id": appt.id,
-                "doctor": {
-                    "id": appt.doctor.id,
-                    "email": appt.doctor.user.email,
-                },
-                "department": {
-                    "id": appt.department.id,
-                    "name": appt.department.name,
-                },
-                "token": {
-                    "id": appt.token_number.id,
-                    "token_number": appt.token_number.token_number,
-                    "appointment_date": appt.token_number.appointment_date,
-                    "start_time": appt.token_number.start_time,
-                    "end_time": appt.token_number.end_time,
-                    "is_booked": appt.token_number.is_booked,
-                },
-                "appointment_date": appt.appointment_date,
-                "start_time": appt.start_time,
-                "end_time": appt.end_time,
-                "status": appt.status,
-                "reason": appt.reason,
-                "notes": appt.notes
-            })
-
-
-    latest = sorted(latest, key=lambda x: (x['appointment_date'], x['start_time']))
 
     return Response({
         "status_code": 6000,
-        "latest_appointment": latest,
+        "latest_appointment": serializers.data,
     })
-
-
-
-
-
-
-
 
 
 
@@ -610,54 +642,96 @@ def latest_appointments(request):
 @permission_classes([IsAuthenticated])
 def pre_appointments(request):
     user = request.user
-    patient = Patient.objects.get(user=user)
+    customer = Customer.objects.get(user=user)
+    patient = Patient.objects.get(customer=customer)
 
     today = date.today()
 
-    appointments = Appointment.objects.filter(patient=patient).order_by('-appointment_date', '-start_time')
-
-    previous = []
-
-    for appt in appointments:
-        if appt.appointment_date < today:
-            previous.append({
-                "appointment_id": appt.id,
-                "doctor": {
-                    "id": appt.doctor.id,
-                    "email": appt.doctor.user.email,
-                },
-                "department": {
-                    "id": appt.department.id,
-                    "name": appt.department.name,
-                },
-                "token": {
-                    "id": appt.token_number.id,
-                    "token_number": appt.token_number.token_number,
-                    "appointment_date": appt.token_number.appointment_date,
-                    "start_time": appt.token_number.start_time,
-                    "end_time": appt.token_number.end_time,
-                    "is_booked": appt.token_number.is_booked,
-                },
-                "appointment_date": appt.appointment_date,
-                "start_time": appt.start_time,
-                "end_time": appt.end_time,
-                "status": appt.status,
-            })
-
-
-    previous = sorted(previous, key=lambda x: (x['appointment_date'], x['start_time']))
+    appointments = Appointment.objects.filter(patient=patient, appointment_date__lt=today).order_by('-appointment_date', '-start_time')
+    previous = AppointmentSerializer(appointments, many=True)
 
     return Response({
         "status_code": 6000,
-        "pre_appointment": previous,
+        "pre_appointment": previous.data,
     })
 
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def appointment_bill(request, id):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    try:
+        patient = Patient.objects.get(customer=customer)
+        appointment = Appointment.objects.get(id=id, patient=patient)
+        appointment_bill = AppointmentBill.objects.get(appointment=appointment)
+    except (Patient.DoesNotExist, Appointment.DoesNotExist):
+        return Response({
+            "status_code": 404,
+            "message": "Appointment not found"
+        })
+
+    serializer = AppointmentBillSerializer(appointment_bill)
+    return Response({
+        "status_code": 6000,
+        "appointment_bill": serializer.data
+    })
 
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def single_appointment(request, id):
+    user = request.user
+    customer = Customer.objects.get(user=user)
+    try:
+        patient = Patient.objects.get(customer=customer)
+        appointment = Appointment.objects.get(id=id, patient=patient)
+    except (Patient.DoesNotExist, Appointment.DoesNotExist):
+        return Response({
+            "status_code": 404,
+            "message": "Appointment not found"
+        })
+    serializer = AppointmentSerializer(appointment)
+    return Response({
+        "status_code": 6000,
+        "appointment": serializer.data
+    })
 
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def appointment_prescription(request, id):
+    user = request.user
+    try:
+        customer = Customer.objects.get(user=user)
+        patient = Patient.objects.get(customer=customer)
+    except (Customer.DoesNotExist, Patient.DoesNotExist):
+        return Response({
+            "status_code": 404,
+            "message": "Patient not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
+    try:
+        appointment_complete = Appointment.objects.get(id=id, status='completed')
+    except Appointment.DoesNotExist:
+        return Response({
+            "status_code": 404,
+            "message": "Completed appointment not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        prescription = Prescription.objects.get(patient=patient, appointment=appointment_complete)
+    except Prescription.DoesNotExist:
+        return Response({
+            "status_code": 404,
+            "message": "Prescription not found for this appointment"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = PrescriptionSerializer(prescription)
+    return Response({
+        "status_code": 6000,
+        "prescriptions": serializer.data
+    }, status=status.HTTP_200_OK)
