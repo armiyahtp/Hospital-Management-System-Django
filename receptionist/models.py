@@ -31,7 +31,10 @@ class ApprovedReceptionist(models.Model):
 
 class Receptionist(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    license_number = models.CharField(max_length=50)
+    profile_image = models.FileField(upload_to='staff_image', null=True, blank=True)
+    experience = models.IntegerField(default=0)
+    specialization = models.CharField(max_length=255, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
 
 
     class Meta:
@@ -41,4 +44,4 @@ class Receptionist(models.Model):
         ordering = ["-id"]
     
     def __str__(self):
-        return f"{self.user.email} ({self.license_number})"
+        return self.user.email

@@ -61,16 +61,21 @@ def customer_register(request):
             password=serializer.validated_data['password'],
             is_customer=True
         )
-        dob = request.data.get('dob')
+
+        dob_str = request.data.get('date_of_birth')
+        dob = datetime.datetime.strptime(dob_str, "%Y-%m-%d").date()
         gender = request.data.get('gender')
         place = request.data.get('place')
         address = request.data.get('address')
-        Customer.objects.create(
+        customer =Customer.objects.create(
             user=user,
             dob=dob,
             gender=gender,
             place=place,
             address=address,
+        )
+        Patient.objects.create(
+            customer=customer,
         )
         refresh = RefreshToken.for_user(user)
         return Response({"status_code": 6000, 'access' : str(refresh.access_token), "message": "User created successfully"})
@@ -428,13 +433,16 @@ def single_doctor(request, id):
 def create_payment_intent(request,id):
     user = request.user
     customer = Customer.objects.get(user=user)
-    patient = Patient.objects.get(customer=customer)
     token = Token.objects.get(id=id)
     token_date = token.appointment_date
-    appointment = Appointment.objects.filter(
-        patient=patient,
-        appointment_date=token_date
-    )
+
+    if Patient.objects.filter(customer=customer).exists():
+        patient = Patient.objects.get(customer=customer)
+        appointment = Appointment.objects.filter(
+            patient=patient,
+            appointment_date=token_date
+        )
+        
     if appointment.exists():
         return Response({"error": "You already have an appointment on this date"}, status=400)
 

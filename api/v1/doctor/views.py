@@ -740,18 +740,16 @@ def prescription_create(request, id):
     appointment = Appointment.objects.get(id=id, doctor=doctor)
     patient = appointment.patient
 
+    title = request.data.get('title')
     notes = request.data.get('notes')
     duration = request.data.get('duration')
 
     prescription = Prescription.objects.create(
         patient=patient,
         appointment=appointment,
+        title=title,
         notes=notes,
         duration=duration
-    )
-
-    prescription_item = PrescriptionItem.objects.create(
-        prescription=prescription
     )
 
     
@@ -769,7 +767,6 @@ def prescription_update(request, id):
     doctor = Doctor.objects.get(user=user)
 
     prescription = Prescription.objects.get(id=id, appointment__doctor=doctor)
-    prescription_item = PrescriptionItem.objects.filter(prescription=prescription)
 
     notes = request.data.get('notes')
     duration = request.data.get('duration')

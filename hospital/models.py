@@ -360,6 +360,7 @@ class Token(models.Model):
     token_number = models.CharField(max_length=20)
     start_time = models.TimeField()
     end_time = models.TimeField()
+    is_locked = models.BooleanField(default=False)
     is_booked = models.BooleanField(default=False)
     is_canceled = models.BooleanField(default=False)
 
