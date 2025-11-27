@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: hms-django
+    env: python
+    rootDir: backend/src/HMS_Django
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn HMS_Django.wsgi"
+    plan: free
+    envVars:
+      - key: DEBUG
+        fromDatabase: false
+        value: "True"
+      - key: SECRET_KEY
+        fromDatabase: false
+        value: 'django-insecure-zvv-ms(+7c)43n5tw)%_=z=49hd9_jy%u2(qimdn!4yjdo)hu@'
+
+

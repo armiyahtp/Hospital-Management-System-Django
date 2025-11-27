@@ -18,9 +18,7 @@ urlpatterns = [
 
 
 
-    path('token/lock/<int:id>/', views.token_lock, name='token_lock'),
     path('patient/appointment/create/<int:id>/', views.patient_appointment_create, name='patient_appointment_create'),
-    path('patient/bill/', views.bill_patient, name='bill_patient'),
     path('patient/appointment/take/', views.take_patient_appointment, name='take_patient_appointment'),
 
 
@@ -39,6 +37,7 @@ urlpatterns = [
     path('edit/doctor/availability/<int:id>/', views.edit_doctor_availability, name='edit_doctor_availability'),
     path('delete/doctor/availability/<int:id>/', views.delete_doctor_availability, name='delete_doctor_availability'),
     path('doctor/patients/<int:id>/', views.doctor_patients, name='doctor_patients'),
+    path('doctor/appointments/<int:id>/', views.doctor_appointments, name='doctor_appointments'),
      
  
 
@@ -56,10 +55,16 @@ urlpatterns = [
     path('upcoming/appointments/', views.upcoming_appointments, name='upcoming_appointments'),
     path('single/appointment/<int:id>/', views.single_appointment, name='single_appointment'),
     path('appointment/bill/<int:id>/', views.appointment_bill, name='appointment_bill'),
+    path('appointment/change-status/<int:id>/', views.change_appointment_status, name='change_appointment_status'),
 
 
 
     path('patients/', views.all_patients, name='all_patients'),
     path('single/patient/<int:id>/', views.single_patient, name='single_patient'),
+    path('patient/phone/', views.patient_phonenumber, name='patient_phonenumber'),
 
+
+
+
+    path('create/bill/<int:id>/', views.add_bill_item, name='pay_appointment_bill'),
 ]

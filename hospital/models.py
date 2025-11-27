@@ -281,24 +281,6 @@ class GeneralWardBed(models.Model):
 
 
 
-class DoctorsInHospital(models.Model):
-    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
-    email = models.EmailField(unique=True)
-    license_number = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=100)
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
-    active = models.BooleanField(default=True)
-
-
-    class Meta:
-        db_table = 'hospital_doctors'
-        verbose_name = 'hospital doctor'
-        verbose_name_plural = 'hospital doctors'
-        ordering = ["-id"]
-
-  
-    def __str__(self):
-        return f"{self.name} ({self.license_number})"
 
 
 
@@ -360,7 +342,6 @@ class Token(models.Model):
     token_number = models.CharField(max_length=20)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    is_locked = models.BooleanField(default=False)
     is_booked = models.BooleanField(default=False)
     is_canceled = models.BooleanField(default=False)
 
@@ -399,6 +380,7 @@ class Patient(models.Model):
     ])
     phone_number = models.CharField(max_length=15)
     place = models.CharField(max_length=250, null=True, blank=True)
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -476,6 +458,25 @@ class Appointment(models.Model):
 
 
 
+class Medicine(models.Model):
+    name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        db_table = 'medicine'
+        verbose_name = 'medicine'
+        verbose_name_plural = 'medicines'
+        ordering = ["-id"]
+
+    def __str__(self):
+        return self.name
+
+
+
+
+
+
+
 
 
 
@@ -511,7 +512,7 @@ class Prescription(models.Model):
 
 class PrescriptionItem(models.Model):
     prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name="items")
-    medicine = models.CharField(max_length=255, null=True, blank=True)
+    medicine = models.ForeignKey(Medicine, on_delete=models.CASCADE, related_name='medicines')
     dosage = models.CharField(max_length=100, help_text="e.g., 500mg", null=True, blank=True)
     frequency = models.CharField(max_length=100, help_text="e.g., twice daily", null=True, blank=True)
     instructions = models.TextField(blank=True, null=True, help_text="Additional instructions if any")
@@ -639,6 +640,7 @@ class AppointmentBill(models.Model):
     
 
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     medicines_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tests_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     injections_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -681,6 +683,7 @@ class AppointmentBill(models.Model):
 
         self.subtotal = (
             self.consultation_fee +
+            self.registration_fee +
             self.medicines_total +
             self.tests_total +
             self.injections_total +

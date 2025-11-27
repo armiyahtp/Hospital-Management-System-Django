@@ -304,4 +304,4 @@ class AppointmentBillSerializer(ModelSerializer):
     payment = PaymentSerializer()
     class Meta:
         model = AppointmentBill
-        fields = ('id', 'patient', 'doctor', 'appointment', 'consultation_fee', 'medicines_total', 'tests_total', 'injections_total', 'intravenous_total', 'room_total', 'surgery_total', 'nursing_total', 'misc_total', 'subtotal', 'discount', 'tax', 'total_amount', 'amount_paid', 'balance_due', 'status', 'bill_number', 'medicine_items', 'test_items', 'injection_items', 'intravenous_items', 'room_items', 'surgery_items', 'nursing_items', 'misc_items', 'payment')
+        fields = ('id', 'patient', 'doctor', 'appointment', 'consultation_fee', 'registration_fee', 'medicines_total', 'tests_total', 'injections_total', 'intravenous_total', 'room_total', 'surgery_total', 'nursing_total', 'misc_total', 'subtotal', 'discount', 'tax', 'total_amount', 'amount_paid', 'balance_due', 'status', 'bill_number', 'medicine_items', 'test_items', 'injection_items', 'intravenous_items', 'room_items', 'surgery_items', 'nursing_items', 'misc_items', 'payment')

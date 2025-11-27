@@ -1,0 +1,9 @@
+Django
+djangorestframework
+djangorestframework-simplejwt
+gunicorn
+whitenoise
+psycopg2-binary
+python-dotenv
+django-cors-headers
+Pillow

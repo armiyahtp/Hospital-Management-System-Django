@@ -13,7 +13,7 @@ admin.site.register(ICUBed)
 admin.site.register(GeneralWard)
 admin.site.register(GeneralWardBed)
 
-admin.site.register(DoctorsInHospital)
+
 admin.site.register(DoctorAvailability)
 
 admin.site.register(Token)

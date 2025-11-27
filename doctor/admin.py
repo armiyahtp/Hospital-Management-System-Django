@@ -3,5 +3,6 @@ from .models import *
 
 
 admin.site.register(Doctor)
+admin.site.register(DoctorsInHospital)
 
 

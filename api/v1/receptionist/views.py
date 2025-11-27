@@ -5,6 +5,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
 
+from django.conf import settings
+
+
 from django.shortcuts import render
 import datetime
 from datetime import date, timedelta
@@ -18,6 +21,11 @@ from api.v1.common.permissions import IsReceptionist
 from api.v1.common.serializers import *
 from receptionist.models import *
 from hospital.models import *
+
+
+
+
+
 
 
 
@@ -155,88 +163,58 @@ def update_receptionist_profile(request):
 
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated, IsReceptionist])
-def token_lock(request, id):
-    token = Token.objects.get(id=id)
-    token.is_locked = True
-    token.save()
-
-    return Response({
-        "status_code": 6000,
-        "message": "Token is locked",
-        "token_id": token.id,
-    })
-
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsReceptionist])
 def patient_appointment_create(request, id):
-    first_name = request.data.get('first_name')
-    last_name = request.data.get('last_name')
-    age = request.data.get('age')
-    gender = request.data.get('gender')
-    phone_number = request.data.get('phone_number')
-    place = request.data.get('place')
+    pid = request.data.get('ptId')
+    did = request.data.get('drId')
 
+    
+    if pid:
+        if Patient.objects.filter(id=pid).exists():
+            patient = Patient.objects.get(id=pid)     
+    else:
+        patient = Patient.objects.create(
+            first_name=request.data.get('first_name'),
+            last_name=request.data.get('last_name'),
+            age=request.data.get('age'),
+            gender=request.data.get('gender'),
+            phone_number=request.data.get('phone_number'),
+            place=request.data.get('place'),
+        )
 
-    patient = Patient.objects.create(
-        first_name=first_name,
-        last_name=last_name,
-        age=age,
-        gender=gender,
-        phone_number=phone_number,
-        place=place,
-    )
-
+    
     token = Token.objects.get(id=id)
-
-    
-
-
-    registration_fee = token.doctor.department.hospital.registration_fee or 0
+    fee = token.department.hospital.registration_fee
+    registration_fee = fee - patient.registration_fee
     doctor_fee = token.doctor.fee or 0
-    amount = registration_fee + doctor_fee
-    
-
 
 
     bill = AppointmentBill.objects.create(
         patient=patient,
         doctor=token.doctor,
-        consultation_fee=amount,
-        status='pending'
+        consultation_fee=doctor_fee,
+        registration_fee=registration_fee,
     )
+    bill.update_totals
+    bill.save()
 
-
+    
     
 
 
-    return Response({
-        "status_code": 6000,
-        "message": "Patient created successfully",
-        "bill_id": bill.id,
-        "token_id": token.id,
-        "patient_id": patient.id
-    })
-
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsReceptionist])
-def bill_patient(request):
-    bill_id = request.data.get("bill_id")
-    bill = AppointmentBill.objects.get(id=bill_id)
-
     serializer = AppointmentBillSerializer(bill)
-
     return Response({
         "status_code": 6000,
-        "message": "Patient bill created successfully",
-        "bill": serializer.data
+        "message": "Patient bill created successfully (Razorpay Test Mode)",
+        "bill": serializer.data,
+        "token_id": token.id,
+        "patient_id": patient.id,
     })
 
+    
 
 
 @api_view(['POST'])
@@ -248,7 +226,6 @@ def take_patient_appointment(request):
     reason = request.data.get("reason", "")
     notes = request.data.get("notes", "")
     bill_id = request.data.get("bill_id")
-    paid_amount = request.data.get("paid_amount", 0)
 
 
 
@@ -258,7 +235,7 @@ def take_patient_appointment(request):
     patient = Patient.objects.get(id=patient_id)
     
 
-    if res == 'paid':
+    if res == 'confirmed':
         appointment = Appointment.objects.create(
             token=token,
             patient=patient,
@@ -270,7 +247,6 @@ def take_patient_appointment(request):
             end_time=token.end_time,
             reason=reason,
             notes=notes,
-            status="confirmed"
         )
 
         token.is_booked = True 
@@ -283,21 +259,27 @@ def take_patient_appointment(request):
         appointment_bill.patient = patient
         appointment_bill.doctor = token.doctor
         appointment_bill.appointment = appointment
-        appointment_bill.amount_paid = paid_amount
+        appointment_bill.amount_paid = appointment_bill.total_amount
         appointment_bill.update_totals
         appointment_bill.save()
 
 
+
+        Payment.objects.create(
+            bill=appointment_bill,
+            method='upi',
+            status='completed',
+            paid_amount=appointment_bill.total_amount,
+        )
+
         return Response({
             "status_code": 6000,
-            "message": "Patient apointment created successfully",
+            "message": "Patient appointment created successfully",
         })
     
 
     elif res == 'cancelled':
         appointment_bill.delete()
-        token.is_locked = False
-        token.save()
 
 
         return Response({
@@ -552,6 +534,19 @@ def doctor_patients(request, id):
     return Response({
         "status_code": 6000,
         "patients": serializer.data
+    })
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsReceptionist])
+def doctor_appointments(request, id):
+    doctor = Doctor.objects.get(id=id)
+    appointments = (Appointment.objects.filter(doctor=doctor, appointment_date=date.today()).order_by('start_time'))
+    serializer = AppointmentSerializer(appointments, many=True)
+    return Response({
+        "status_code": 6000,
+        "appointments": serializer.data
     })
 
 
@@ -871,7 +866,29 @@ def appointment_bill(request, id):
 
 
 
-
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsReceptionist])
+def change_appointment_status(request, id):
+    try:
+        appointment = Appointment.objects.get(id=id)
+    except Appointment.DoesNotExist:
+        return Response({
+            "status_code": 404,
+            "message": "Appointment not found"
+        })
+    
+    status = request.data.get('status')
+    if status:
+        appointment.status = status
+        appointment.save()
+        return Response({
+            "status_code": 6000,
+            "message": "Appointment status updated successfully"
+        })
+    return Response({
+        "status_code": 400,
+        "message": "Invalid status"
+    })
 
 
 
@@ -920,3 +937,81 @@ def single_patient(request, id):
         "status_code": 6000,
         "patient": serializer.data
     })
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsReceptionist])
+def patient_phonenumber(request):
+    phone_number = request.query_params.get('phone_number')
+    patients = Patient.objects.filter(phone_number=phone_number)
+    serializer = PatientSerializer(patients, many=True)
+    return Response({
+        "status_code": 6000,
+        "patients": serializer.data
+    })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ITEM_MAP = {
+    'medicine': (BillMedicineItem, BillMedicineSerializer),
+    'test': (BillTestItem, BillTestSerializer),
+    'injection': (BillInjectionItem, BillInjectionSerializer),
+    'iv': (BillIntravenousItem, BillIVSerializer),
+    'room': (BillRoomItem, BillRoomSerializer),
+    'surgery': (BillSurgeryItem, BillSurgerySerializer),
+    'nursing': (BillNursingItem, BillNursingSerializer),
+    'misc': (BillMiscItem, BillMiscSerializer),
+}
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_bill_item(request, bill_id):
+    item_type = request.data.get("type")
+    item_data = request.data
+
+    if item_type not in ITEM_MAP:
+        return Response({"error": "Invalid item type."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        bill = AppointmentBill.objects.get(id=bill_id)
+    except AppointmentBill.DoesNotExist:
+        return Response({"error": "Bill not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer_class = ITEM_MAP[item_type]
+
+    # ✅ Add the bill foreign key to the data
+    item_data["bill"] = bill.id
+
+    serializer = serializer_class(data=item_data)
+    if serializer.is_valid():
+        serializer.save(bill=bill)
+
+        # ✅ Automatically update totals
+        if hasattr(bill, "update_totals"):
+            bill.update_totals
+        bill.save()
+
+        return Response({
+            "message": f"{item_type.capitalize()} item added successfully.",
+            "item": serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

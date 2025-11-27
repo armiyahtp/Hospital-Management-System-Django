@@ -46,7 +46,12 @@ def doctor_register(request):
                 user=user,
                 department=department
             )
-            return Response({"status_code": 6000, "message": "User created successfully"})
+
+            refresh = RefreshToken.for_user(user)
+            data = {
+                'access' : str(refresh.access_token),
+            }
+            return Response({"status_code": 6000, "data": data, "message": "User created successfully"})
         
     return Response({"status_code": 6001, "error": serializer.errors})
 
@@ -309,7 +314,8 @@ def generate_token(request):
     availability = request.data.get('availability')
     today = date.today()
 
-    Token.objects.filter(appointment_date__lt=today).delete()
+    doctor = Doctor.objects.get(id=availability['doctor'])
+    Token.objects.filter(appointment_date__lt=today, doctor=doctor).delete()
 
     current_date = today + timedelta(days=1)
     end_date = today + timedelta(weeks=1)
@@ -363,7 +369,7 @@ def generate_token(request):
                 formatted = f"TKN{tkn:02d}"
                 token, created = Token.objects.get_or_create(
                     doctor=doctor,
-                    departemnt=doctor.department,
+                    department=doctor.department,
                     appointment_date=current_date,
                     token_number=formatted,
                     defaults={
