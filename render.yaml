@@ -2,9 +2,9 @@ services:
   - type: web
     name: hms-django
     env: python
-    rootDir: backend/src/HMS_Django
+    rootDir: .
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn HMS_Django.wsgi"
+    startCommand: "gunicorn HMS_Django.wsgi:application"
     plan: free
     envVars:
       - key: DEBUG
