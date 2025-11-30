@@ -2,8 +2,16 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
+import dj_database_url
 
-load_dotenv()
+
+
+ENV = os.getenv("ENV", "local")
+
+if ENV == "render":
+    load_dotenv(".env.render")
+else:
+    load_dotenv(".env.local")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -94,18 +102,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'HMS_Django.wsgi.application'
 
-
-# DATABASE (Render Postgres)
-DATABASES = {
-    'default': {
-        "ENGINE" : "django.db.backends.postgresql_psycopg2",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", 5432),
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    # Render / Production
+    DATABASES = {
+        "default": dj_database_url.config(default=DATABASE_URL, conn_max_age=600, ssl_require=True)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            "ENGINE" : "django.db.backends.postgresql_psycopg2",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST"),
+            "PORT": os.getenv("DB_PORT", 5432),
+        }
+    }
 
 
 # PASSWORD VALIDATION
