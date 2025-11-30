@@ -67,15 +67,12 @@ def customer_register(request):
         gender = request.data.get('gender')
         place = request.data.get('place')
         address = request.data.get('address')
-        customer =Customer.objects.create(
+        Customer.objects.create(
             user=user,
             dob=dob,
             gender=gender,
             place=place,
             address=address,
-        )
-        Patient.objects.create(
-            customer=customer,
         )
         refresh = RefreshToken.for_user(user)
         return Response({"status_code": 6000, 'access' : str(refresh.access_token), "message": "User created successfully"})
