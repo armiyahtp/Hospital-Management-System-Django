@@ -3,15 +3,19 @@ services:
     name: hms-django
     env: python
     rootDir: .
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn HMS_Django.wsgi:application"
     plan: free
+
+    buildCommand: "pip install -r requirements.txt"
+
+    startCommand: >
+      gunicorn HMS_Django.wsgi:application
+      --workers 1
+      --timeout 120
+      --max-requests 300
+      --max-requests-jitter 50
+
     envVars:
       - key: DEBUG
-        fromDatabase: false
         value: "True"
       - key: SECRET_KEY
-        fromDatabase: false
-        value: 'django-insecure-zvv-ms(+7c)43n5tw)%_=z=49hd9_jy%u2(qimdn!4yjdo)hu@'
-
-
+        value: "django-insecure-zvv-ms(+7c)43n5tw)%_=z=49hd9_jy%u2(qimdn!4yjdo)hu@"
