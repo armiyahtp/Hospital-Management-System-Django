@@ -11,8 +11,8 @@ services:
       gunicorn HMS_Django.wsgi:application
       --workers 1
       --timeout 120
-      --max-requests 300
-      --max-requests-jitter 50
+      --max-requests 200
+      --max-requests-jitter 30
 
     envVars:
       - key: DEBUG
