@@ -1,4 +1,5 @@
 Django
+dj-database-url
 djangorestframework
 djangorestframework-simplejwt
 gunicorn
